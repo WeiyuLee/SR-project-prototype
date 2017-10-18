@@ -260,10 +260,10 @@ class model_zoo:
             grid3_input = tf.pad(grid3_input, [[0, 0], [padding_grid, padding_grid], [padding_grid, padding_grid], [0, 0]], "SYMMETRIC")
             grid4_input = tf.pad(grid4_input, [[0, 0], [padding_grid, padding_grid], [padding_grid, padding_grid], [0, 0]], "SYMMETRIC")
             
-            print(grid1_input.get_shape())
-            print(grid2_input.get_shape())
-            print(grid3_input.get_shape())
-            print(grid4_input.get_shape())
+            #print(grid1_input.get_shape())
+            #print(grid2_input.get_shape())
+            #print(grid3_input.get_shape())
+            #print(grid4_input.get_shape())
             
             grid_input = [grid1_input, grid2_input, grid3_input, grid4_input]
             
@@ -309,17 +309,17 @@ class model_zoo:
             idx_grid_dict = {idx_shuffled[i]:grid_output[i] for i in range(4)}
             grid_output_reorder = tf.gather(grid_output, tf.nn.top_k(-idx_shuffled, k=4).indices)
             
-            print(grid1_layer3_output.get_shape())
-            print(grid2_layer3_output.get_shape())
-            print(idx_grid_dict)
+            #print(grid1_layer3_output.get_shape())
+            #print(grid2_layer3_output.get_shape())
+            #print(idx_grid_dict)
             
             tmp_output1 = tf.concat([grid_output_reorder[0], grid_output_reorder[1]], 2)
             tmp_output2 = tf.concat([grid_output_reorder[2], grid_output_reorder[3]], 2)
             final_output = tf.concat([tmp_output1, tmp_output2], 1)
             
-            print(tmp_output1.get_shape())
-            print(tmp_output2.get_shape())
-            print(final_output.get_shape())
+            #print(tmp_output1.get_shape())
+            #print(tmp_output2.get_shape())
+            #print(final_output.get_shape())
             
         return (stg1_layer3_output, stg2_layer3_output, stg3_layer3_output),\
                (grid1_layer3_output, grid2_layer3_output, grid3_layer3_output, grid4_layer3_output),\
