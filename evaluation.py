@@ -1,92 +1,31 @@
 import cv2
 import numpy as np
 import os
+import argparse
 import tensorflow as tf
 import sys
 import scipy.misc
+
 sys.path.append('./utility')
 import utils as ut
 import model_zoo  
+import config
 
+def resize(inputs, target_shape, interpolation = cv2.INTER_CUBIC):
+	
+	resize_img = cv2.resize(inputs, target_shape,  interpolation = interpolation)
+	
+	if inputs.shape[-1] == 1: resize_img = np.expand_dims(resize_img, axis = 2)
+	
+	return resize_img
 
+def GaussianBlur(inputs, guassian_kernel_size, std):
 
-class becnchmark:
+	blur_img = cv2.GaussianBlur( inputs, guassian_kernel_size,std)
+	if inputs.shape[-1] == 1: blur_img = np.expand_dims(blur_img, axis = 2)
+	return blur_img
 
-	def run(self, inputs, target, psnr_mode='YCbCr'):
-		self.input = inputs
-		self.target = target
-
-		psnr = self._psnr(mode = psnr_mode)
-		ssim = self._ssim()
-
-		return psnr, ssim
-
-
-	def _psnr(self, mode='YCbCr'):
-
-		#input_uint8 = cv2.convertScaleAbs(self.input)
-		#target_uint8 = cv2.convertScaleAbs(self.target)
-
-		input_uint8 = self.input
-		target_uint8 = self.target
-
-		
-
-		if mode == 'YCbCr':
-			inputs = input_uint8
-			target = target_uint8
-
-		else:
-			inputs = input_uint8
-			target = target_uint8
-
-		mse = np.square(inputs - target)
-		mse = mse.mean()
-		psnr_val = 20*np.log10(255/(np.sqrt(mse)))    
-
-
-		return psnr_val
-
-	def _ssim(self, param = [0.01,0.03], L=255,guassian_kernel_size = (11,11), std = 1.5):
-
-
-		C1 = np.power(param[0]*L,2)
-		C2 = np.power(param[1]*L,2)
-
-		_input = self.input
-		_target = self.target
-
-		clipping = [guassian_kernel_size[0]//2, _input.shape[0] - guassian_kernel_size[0]//2,
-					guassian_kernel_size[1]//2, _input.shape[1] - guassian_kernel_size[0]//2]
-
-
-
-		blur_input = np.expand_dims(cv2.GaussianBlur( _input, guassian_kernel_size,std), axis=2)[clipping[0]:clipping[1], clipping[2]:clipping[3],:]
-		blur_target = np.expand_dims(cv2.GaussianBlur( _target, guassian_kernel_size,std), axis=2)[clipping[0]:clipping[1], clipping[2]:clipping[3],:]
-		
-		
-		mu1_sq = np.multiply(blur_input, blur_input)
-		mu2_sq = np.multiply(blur_target, blur_target)
-		mu1_mu2 = np.multiply(blur_input, blur_target)
-
-		sigma1_sq = np.subtract(np.expand_dims(cv2.GaussianBlur(np.multiply(_input,_input),guassian_kernel_size,std), axis=2)[clipping[0]:clipping[1], clipping[2]:clipping[3],:], mu1_sq)
-		sigma2_sq = np.subtract(np.expand_dims(cv2.GaussianBlur(np.multiply(_target,_target),guassian_kernel_size,std), axis=2)[clipping[0]:clipping[1], clipping[2]:clipping[3],:], mu2_sq)
-		sigma12 = np.subtract(np.expand_dims(cv2.GaussianBlur(np.multiply(_input,_target),guassian_kernel_size,std), axis=2)[clipping[0]:clipping[1], clipping[2]:clipping[3],:], mu1_mu2)
-
-		
-		upper_part = np.multiply(2*mu1_mu2 + C1, 2*sigma12+C2)
-		down_part =  np.multiply(mu1_sq+mu2_sq+C1, sigma1_sq+sigma2_sq+C2)
-
-		ssim_map = np.divide(upper_part, down_part)
-
-		ssim_mean = np.mean(ssim_map)
-
-		return ssim_mean
-
-	def ifc(self):
-		return
-
-def imread(data_path, is_grayscale=True):
+def imread(data_path, is_grayscale=False):
 
         if is_grayscale:
             img = scipy.misc.imread(data_path, flatten=True, mode='YCbCr').astype(np.float64)
@@ -128,8 +67,7 @@ def split_img(imgname,img, padding_size, subimg_size):
 			# insert sub image to dictionary with key = [imagename]_[row_index]_[col_index]
 			sub_imgs[imgname + "_"+ str(grid_r) + "_" + str(grid_c)] = sub_img
 
-
-	return sub_imgs
+	return padded_size, sub_imgs
 
 
 
@@ -137,11 +75,10 @@ def merge_img(img_size, sub_images, padding_size,subimg_size, scale=2, down_scal
 
 	# Create an empty array for merging image
 
-	padded_size = [	img_size[0] - 2*padding_size[0],
-					img_size[1] - 2*padding_size[1],
+	padded_size = [	img_size[0],
+					img_size[1],
 					img_size[2]]
 
-	
 	merged_image = np.zeros([	(padded_size[0]//subimg_size[0])*subimg_size[0],
 								(padded_size[1]//subimg_size[1])*subimg_size[1],
 								 padded_size[2]])
@@ -152,15 +89,11 @@ def merge_img(img_size, sub_images, padding_size,subimg_size, scale=2, down_scal
 		grid_r = int(key[1])*scale - padding_size[0]
 		grid_c = int(key[2])*scale - padding_size[1]
 
-		#print(k, grid_r, grid_c,  merged_image.shape,sub_images[k].shape,padding_size, subimg_size[1])
-		
 		if down_scale_by_model == True: 
 			padding_size_rescale = [0,0]
 		else:
 			padding_size_rescale = padding_size
 
-		
-		
 		merged_image[grid_r:grid_r+subimg_size[0],
 						grid_c:grid_c+subimg_size[1],
 						:] = sub_images[k][padding_size_rescale[0]:padding_size_rescale[0]+subimg_size[0],
@@ -168,92 +101,100 @@ def merge_img(img_size, sub_images, padding_size,subimg_size, scale=2, down_scal
 											:]
 	return merged_image
 
+class becnchmark:
 
-def input_setup(input_path, target_path, padding_size = [3,3], subimg_size = [30,30], scale = 2):
+	def run(self, inputs, target, psnr_mode='YCbCr'):
+
+		self.input = inputs
+		self.target = target
+
+		assert inputs.shape[-1] == 3 or inputs.shape[-1] == 1, "Only allow inputs with channel 1 or 3!" 
+
+		psnr = self._psnr(mode = psnr_mode)
+		ssim = self._ssim()
+
+		return psnr, ssim
+
+
+	def _psnr(self, mode='YCbCr'):
+		
+		_input = self.input
+		_target = self.target	
+
+		if mode == 'YCbCr':
+			if _input.shape[-1] == 1:
+				_input = _input
+				_target = _target
+			else:
+				_input = _input[:,:,0]
+				_target = _target[:,:,0]
+		else:
+			_input = _input
+			_target = _target
+
+
+		mse = np.square(_input - _target)
+		mse = mse.mean()
+		psnr_val = 20*np.log10(255/(np.sqrt(mse)))    
+
+
+		return psnr_val
+
+	def _ssim(self, param = [0.01,0.03], L=255,guassian_kernel_size = (11,11), std = 1.5):
+
+		
+
+		C1 = np.power(param[0]*L,2)
+		C2 = np.power(param[1]*L,2)
+
+		_input = self.input
+		_target = self.target
+
+
+		clipping = [guassian_kernel_size[0]//2, _input.shape[0] - guassian_kernel_size[0]//2,
+					guassian_kernel_size[1]//2, _input.shape[1] - guassian_kernel_size[0]//2]
+
+
+		
+		blur_input = GaussianBlur( _input, guassian_kernel_size,std)[clipping[0]:clipping[1], clipping[2]:clipping[3],:]
+		blur_target = GaussianBlur( _target, guassian_kernel_size,std)[clipping[0]:clipping[1], clipping[2]:clipping[3],:]
+		
+		
+		mu1_sq = np.multiply(blur_input, blur_input)
+		mu2_sq = np.multiply(blur_target, blur_target)
+		mu1_mu2 = np.multiply(blur_input, blur_target)
+
+		sigma1_sq = np.subtract(GaussianBlur(np.multiply(_input,_input),guassian_kernel_size,std)[clipping[0]:clipping[1], clipping[2]:clipping[3],:], mu1_sq)
+		sigma2_sq = np.subtract(GaussianBlur(np.multiply(_target,_target),guassian_kernel_size,std)[clipping[0]:clipping[1], clipping[2]:clipping[3],:], mu2_sq)
+		sigma12 = np.subtract(GaussianBlur(np.multiply(_input,_target),guassian_kernel_size,std)[clipping[0]:clipping[1], clipping[2]:clipping[3],:], mu1_mu2)
+
+		
+		upper_part = np.multiply(2*mu1_mu2 + C1, 2*sigma12+C2)
+		down_part =  np.multiply(mu1_sq+mu2_sq+C1, sigma1_sq+sigma2_sq+C2)
+
+		ssim_map = np.divide(upper_part, down_part)
+
+		ssim_mean = np.mean(ssim_map)
+
+		return ssim_mean
+
+	def ifc(self):
+		return
+
+
+
+def print_progress(type_name, current_progress, total_progress, percentage=True):
 
 	
-	inputs = imread(input_path,True)
-	targets = imread(target_path,True)
+	if percentage == True:
+		progress_pr = int(current_progress/total_progress*20)
+		sys.stdout.write(type_name +" Progress: " + str(current_progress) + '/' + str(total_progress)+ ' |'+'#'*progress_pr + '-'*(20-progress_pr) + '\r')
+	else:
+		sys.stdout.write(type_name + " Progress: " + str(current_progress) + '/' + str(total_progress)+ ' |'+'#'*current_progress + '-'*(total_progress-current_progress) + '\r')
 	
-	sout = split_img("input",inputs, padding_size, subimg_size)
-
-	grid_out = []
-	grid_out_key = []
-	for k in sout:
-		grid_out_key.append(k)
-		grid_out.append(sout[k])
-	grid_stack = np.stack(grid_out)
-
-	padding_size = [padding_size[0]*scale, padding_size[1]*scale]
-	subimg_size = [subimg_size[0]*scale, subimg_size[1]*scale]
-	target_split = split_img("target",targets, padding_size, subimg_size)
-	target_merge = merge_img(targets.shape, target_split, padding_size, subimg_size, 1)
-
-	input_pair = {
-					'inputs':grid_stack,
-					'input_key': grid_out_key,
-					'target': target_merge
-				}
-
-	return input_pair
-
-
-def input_setup_test(padding_size = [3,3], subimg_size = [30,30], scale = 2):
-
-	small_out = {}
-
-	img_path = '/home/ubuntu/dataset/SuperResolution/Set5/image_SRF_1/img_002_SRF_1_HR.bmp'
-	img_path2 = '/home/ubuntu/dataset/SuperResolution/Set5/image_SRF_1/img_002_SRF_1_LR.bmp'
-	targets = cv2.imread(img_path)
-	inputs = cv2.imread(img_path2)
-
-	sout = split_img("input",inputs, padding_size, subimg_size)
-	padding_size = [padding_size[0]*scale, padding_size[1]*scale]
 	
-	for k in sout:
-
-		small_out[k] = cv2.resize(sout[k], (subimg_size[1]*scale+2*padding_size[1],subimg_size[0]*scale+2*padding_size[0]))
-
-
-	subimg_size = [subimg_size[0]*scale, subimg_size[1]*scale]
-	target_out = split_img("target",targets, padding_size, subimg_size)
-	
-
-	ms = merge_img(targets.shape, small_out, padding_size,subimg_size,scale)
-	ts = merge_img(targets.shape, target_out, padding_size, subimg_size, 1)
-	
-	cv2.imwrite("small.jpg", ms)
-	cv2.imwrite("target.jpg", ts)
-
-
-
-def dataset_setup(data_root = '/home/ubuntu/dataset/SuperResolution', dataset = ["Set5"], scales = [2,3,4]):
-
-	dataset_pair = {}
-
-	for d in dataset:
-
-		dataset_pair[d] = {}
-
-		for scale in scales:
-
-			dataset_pair[d][scale] = {}
-
-			dataset_path = os.path.join(data_root, d, 'image_SRF_'+str(scale))
-			Ntestfiles = len(os.listdir(dataset_path))//2
-
-			for i in range(Ntestfiles):
-				HR_fname = "img_" + '{0:03}'.format(i+1) + '_SRF_' + str(scale) + '_HR.png'
-				LR_fname = "img_" + '{0:03}'.format(i+1) + '_SRF_' + str(scale) + '_LR.png'
-
-				dataset_pair[d][scale]['{0:03}'.format(i+1)] = {
-														'HR':os.path.join(dataset_path, HR_fname),
-														'LR':os.path.join(dataset_path, LR_fname),
-														}
-
-	return dataset_pair
-
-
+	if current_progress == total_progress:sys.stdout.write('\n')
+	else: sys.stdout.flush()	
 
 class evaluation:
 
@@ -294,10 +235,10 @@ class evaluation:
 
 				dataset_path = os.path.join(self.data_root, d, 'image_SRF_'+str(scale))
 				Ntestfiles = len(os.listdir(dataset_path))//2
-
+				
 				for i in range(Ntestfiles):
-					HR_fname = "img_" + '{0:03}'.format(i+1) + '_SRF_' + str(scale) + '_HR.bmp'
-					LR_fname = "img_" + '{0:03}'.format(i+1) + '_SRF_' + str(scale) + '_LR.bmp'
+					HR_fname = "img_" + '{0:03}'.format(i+1) + '_SRF_' + str(scale) + '_HR' + os.path.splitext(os.listdir(dataset_path)[0])[-1]
+					LR_fname = "img_" + '{0:03}'.format(i+1) + '_SRF_' + str(scale) + '_LR' + os.path.splitext(os.listdir(dataset_path)[0])[-1]
 
 					self.dataset_pair[d][scale]['{0:03}'.format(i+1)] = {
 																			'HR':os.path.join(dataset_path, HR_fname),
@@ -305,6 +246,35 @@ class evaluation:
 																		}
 
 		return self.dataset_pair
+
+	def input_setup(self, input_path, target_path, padding_size = [3,3], subimg_size = [30,30], scale = 2):
+
+	
+		inputs = imread(input_path)
+		targets = imread(target_path)
+
+
+		_, sout = split_img("input",inputs, padding_size, subimg_size)
+
+		grid_out = []
+		grid_out_key = []
+		for k in sout:
+			grid_out_key.append(k)
+			grid_out.append(sout[k])
+		grid_stack = np.stack(grid_out)
+
+		padding_size = [padding_size[0]*scale, padding_size[1]*scale]
+		subimg_size = [subimg_size[0]*scale, subimg_size[1]*scale]
+		padded_size, target_split = split_img("target",targets, padding_size, subimg_size)
+		target_merge = merge_img(padded_size, target_split, padding_size, subimg_size, 1)
+
+		input_pair = {
+						'inputs':grid_stack,
+						'input_key': grid_out_key,
+						'target': target_merge
+					}
+
+		return input_pair
 
 	def load_model(self, model_ticket, ckpt_file):
 
@@ -327,7 +297,9 @@ class evaluation:
 
 		return predicted[2]
 
-	def run_evaluation(self, benchmark_type = ["bicubic", "model"], model_ticket_list = [], ckpt_file_list = []):
+
+
+	def run_evaluation(self, benchmark_type = ["bicubic", "model"], model_dict = {}):
 
 		"""
 		Run Evaluation and return benchmark value in benchmark_type
@@ -364,7 +336,7 @@ class evaluation:
 					HR_img = dataset_scale[input_key]['HR']
 					LR_img = dataset_scale[input_key]['LR']
 
-					input_pair = input_setup(LR_img, HR_img, padding_size = padding_size, subimg_size = subimg_size, scale = scale)
+					input_pair = self.input_setup(LR_img, HR_img, padding_size = padding_size, subimg_size = subimg_size, scale = scale)
 
 					test_input = input_pair['inputs']
 					key =  input_pair['input_key']
@@ -378,60 +350,100 @@ class evaluation:
 						up_subimg_size = [subimg_size[0]*scale, subimg_size[1]*scale]
 				
 						for l in range(len(test_input)):
-							tmp = cv2.resize(test_input[l], (up_subimg_size[1]+2*up_padding_size[1],up_subimg_size[0]+2*up_padding_size[0]),  interpolation = cv2.INTER_CUBIC)
-							tmp = np.expand_dims(tmp, axis = 2)
-							output_stack[key[l]] = tmp
+							resize_img = resize(test_input[l], (up_subimg_size[1]+2*up_padding_size[1],up_subimg_size[0]+2*up_padding_size[0]),  interpolation = cv2.INTER_CUBIC)
+							output_stack[key[l]] = resize_img
 
-						bicubic_output = merge_img(imread(HR_img).shape, output_stack, up_padding_size,up_subimg_size, scale)
-
-						progress_pr = int((progress/len(dataset_scale)*10)) 
-						sys.stdout.write("Progress: " + str(progress) + '/' + str(len(dataset_scale))+ ' |'+'#'*progress_pr + '-'*(10-progress_pr) + '\r')
-						if (progress) == len(dataset_scale):sys.stdout.write('\n')
-						else: sys.stdout.flush()	
+						bicubic_output = merge_img(input_pair['target'].shape, output_stack, up_padding_size,up_subimg_size, scale)
 
 						results = becnchmark.run(bicubic_output, input_pair['target'])
 						bechmark_val[set_key][scale_key][input_key]["bicubic"]["psnr"] = results[0]
 						bechmark_val[set_key][scale_key][input_key]["bicubic"]["SSIM"] = results[1]
 
-						print(results[0])
 
-					if "model" in benchmark_type and len(model_ticket_list) > 0:
-						bechmark_val[set_key][scale_key][input_key]["srcnn"] = {}
-						output_stack = {}
-						for midx in range (len(model_ticket_list)):
+						print_progress("bicubic", progress, len(dataset_scale))
+						
 
-							sess, model_prediction = self.load_model(model_ticket_list[midx],ckpt_file_list[midx])
+					if "model" in benchmark_type and len(model_dict) > 0:
+
+						
+						for mkey in model_dict:
+
+							bechmark_val[set_key][scale_key][input_key][mkey] = {}
+							output_stack = {}
+
+							up_padding_size = [padding_size[0]*scale, padding_size[1]*scale]
+							up_subimg_size = [subimg_size[0]*scale, subimg_size[1]*scale]
+
+							sess, model_prediction = self.load_model(mkey,model_dict[mkey]["ckpt_file"])
 
 							for l in range(len(test_input)):
-								testimg = np.expand_dims(test_input[l], axis=0) 
-								testimg = testimg/255.
+								if model_dict[mkey]["isGray"] == True: 
+									testimg = np.expand_dims(test_input[l][:,:,0], axis = 2)
+									if l==0: targetimg = np.expand_dims(input_pair['target'][:,:,0], axis=2)
+								else:
+									testimg = test_input[l]
+									targetimg = input_pair['target']
 
-								m_out = self.prediction(testimg, sess, model_prediction)					
+								if model_dict[mkey]["isNormallized"] == True: 
+									testimg = testimg/255.
+									if l==0: targetimg = targetimg/255.
+								
+								m_out = self.prediction([testimg], sess, model_prediction)					
 								output_stack[key[l]] = np.squeeze(m_out,axis=0)
 								
+							model_out = merge_img(targetimg.shape, output_stack, up_padding_size,up_subimg_size, scale, down_scale_by_model=True)							
+							
+							if model_dict[mkey]["isNormallized"] == True: 
+								model_out = model_out*255
+								targetimg = targetimg*255
 
-							model_out = merge_img(imread(HR_img).shape, output_stack, up_padding_size,up_subimg_size, scale, down_scale_by_model=True)
-							
-							#model_out = np.squeeze(model_out)
-							
-							results = becnchmark.run(model_out*255, input_pair['target'])
-							bechmark_val[set_key][scale_key][input_key]["srcnn"]["psnr"] = results[0]
-							bechmark_val[set_key][scale_key][input_key]["srcnn"]["SSIM"] = results[1]
-							
-							print(results[0])
-							
-							image = model_out*255
-							output_image = scipy.misc.toimage(np.squeeze(image), high=np.max(image), low=np.min(image), mode='L')
-							output_image.save("small.jpg")
-							
-							cv2.imwrite("target.jpg", bicubic_output)
-							
 
+							results = becnchmark.run(model_out, targetimg)
+							bechmark_val[set_key][scale_key][input_key][mkey]["psnr"] = results[0]
+							bechmark_val[set_key][scale_key][input_key][mkey]["SSIM"] = results[1]
+
+							print_progress(mkey, progress, len(dataset_scale))
+							
 							sess.close()
 
 
 		return bechmark_val
 
-eval = evaluation('/home/ubuntu/dataset/SuperResolution', ["Set5"], [1], [20,20], [6,6])
-results = eval.run_evaluation(model_ticket_list = ["grr_grid_srcnn_v1"], ckpt_file_list = ["/home/ubuntu/model/model/SR_project/SRCNN/SRCNN.model-309672"])
-print(results)
+#
+
+
+def main_process():
+
+	parser = argparse.ArgumentParser()
+	parser.add_argument("-c", "--config", default="examples",help="Configuration name")
+	args = parser.parse_args()
+
+	eval_result = []
+
+	conf = config.config(args.config).config
+
+	
+	for midx in range(len(conf["evaluation"]["models"])):
+
+		mkeys = list(conf["evaluation"]["models"][midx])[0]
+
+		eval = evaluation(conf["evaluation"]["dataroot"], 
+						  conf["evaluation"]["test_set"], 
+						  conf["evaluation"]["models"][midx][mkeys]["scale"],
+						  conf["evaluation"]["models"][midx][mkeys]["subimages"], 
+						  conf["evaluation"]["models"][midx][mkeys]["padding"])
+
+
+		results = eval.run_evaluation(benchmark_type = ['model'], model_dict = conf["evaluation"]["models"][midx])
+		eval_result.append(results)
+	
+	results = eval.run_evaluation(benchmark_type = ['bicubic'])
+	eval_result.append(results)
+
+	print(eval_result)
+
+if __name__ == '__main__':
+
+	print("Start Evaluation")
+	main_process()
+	print("Done Evaluation")
