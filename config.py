@@ -74,7 +74,7 @@ class config:
 
 		eval_config = self.config["evaluation"]
 		eval_config["dataroot"] = './preprocess/Test'
-		eval_config["test_set"] = ["Set5"]
+		eval_config["test_set"] = ["Set5", "Set14", "BSD100"]
 		eval_config["models"] = [srcnn(self)]
 
 		

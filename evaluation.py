@@ -150,7 +150,6 @@ class becnchmark:
         _input = self.input
         _target = self.target
 
-
         clipping = [guassian_kernel_size[0]//2, _input.shape[0] - guassian_kernel_size[0]//2,
                     guassian_kernel_size[1]//2, _input.shape[1] - guassian_kernel_size[0]//2]
 
@@ -211,7 +210,10 @@ class evaluation:
         self.becnchmark = becnchmark()
         self.subimg_size = subimg_size
         self.padding_size = padding_size
-        self.inputs = tf.placeholder(tf.float32, [None, 32, 32, 1])
+        self.inputs = tf.placeholder(tf.float32, [	None,
+        											subimg_size[0]+padding_size[0]*2, 
+        											subimg_size[1]+padding_size[1]*2,
+        											channel])
 
     def dataset_setup(self):
         """
@@ -359,7 +361,7 @@ class evaluation:
 
                         bicubic_output = merge_img(input_pair['target'].shape, output_stack, up_padding_size,up_subimg_size, scale)
 
-                        results = becnchmark.run(bicubic_output, input_pair['target'])
+                        results = becnchmark.run(np.expand_dims(bicubic_output[:,:,0], axis=2), np.expand_dims(input_pair['target'][:,:,0],axis=2))
                         bechmark_val[set_key][scale_key]["bicubic"][input_key]["psnr"] = results[0]
                         bechmark_val[set_key][scale_key]["bicubic"][input_key]["SSIM"] = results[1]
 
@@ -430,39 +432,41 @@ class evaluation:
         return bechmark_val
 
 
-def summary_result(results):
+def summary_result(filename, results):
 
-   for i in range(len(results)):
-       
-       
-       
-       for setk in results[i]:
-            for scale_key in results[i][setk]:
-                for mkey in results[i][setk][scale_key]:
-                    
-                    mPSNR = 0
-                    mSSIM = 0
-                    
-                    print("Dataset: {}, scale: {}, model: {}".format(setk, scale_key, mkey))
-                    print("{:<15} {:<20} {:<30}".format("", "PSNR","SSIM"))
-                    
-                    for input_key in results[i][setk][scale_key][mkey]:    
-                        print("{:<15} {:<20} {:<30}".format( input_key, 
-                                                              results[i][setk][scale_key][mkey][input_key]["psnr"], 
-                                                              results[i][setk][scale_key][mkey][input_key]["SSIM"]))
-                        
-                        mPSNR = mPSNR + results[i][setk][scale_key][mkey][input_key]["psnr"]
-                        mSSIM = mSSIM + results[i][setk][scale_key][mkey][input_key]["SSIM"]
-                    
-                    mPSNR = mPSNR/len(results[i][setk][scale_key][mkey])
-                    mSSIM = mSSIM/len(results[i][setk][scale_key][mkey])
-                    
-                    print("="*60)
-                   
-                    print("mPSNR: {}, mSSIM: {}".format(mPSNR, mSSIM))
+	with open(filename, 'w') as f:
+
+	   for i in range(len(results)):
+	       
+	       
+	       
+	       for setk in results[i]:
+	            for scale_key in results[i][setk]:
+	                for mkey in results[i][setk][scale_key]:
+	                    
+	                    mPSNR = 0
+	                    mSSIM = 0
+	                    
+	                    print("Dataset: {}, scale: {}, model: {}".format(setk, scale_key, mkey),file=f)
+	                    print("{:<15} {:<20} {:<30}".format("", "PSNR","SSIM"),file=f)
+	                    
+	                    for input_key in results[i][setk][scale_key][mkey]:    
+	                        print("{:<15} {:<20} {:<30}".format( input_key, 
+	                                                              results[i][setk][scale_key][mkey][input_key]["psnr"], 
+	                                                              results[i][setk][scale_key][mkey][input_key]["SSIM"]), file=f)
+	                        
+	                        mPSNR = mPSNR + results[i][setk][scale_key][mkey][input_key]["psnr"]
+	                        mSSIM = mSSIM + results[i][setk][scale_key][mkey][input_key]["SSIM"]
+	                    
+	                    mPSNR = mPSNR/len(results[i][setk][scale_key][mkey])
+	                    mSSIM = mSSIM/len(results[i][setk][scale_key][mkey])
+	                    
+	                    print("="*60,file=f)
+	                   
+	                    print("mPSNR: {}, mSSIM: {}".format(mPSNR, mSSIM),file=f)
     
 
-
+	   f.close()
 
 def main_process():
 
@@ -491,7 +495,7 @@ def main_process():
     
     results = eval.run_evaluation(benchmark_type = ['bicubic'])
     eval_result.append(results)
-    summary_result(eval_result)
+    summary_result(conf["evaluation"]["summary_file"], eval_result)
 
     return eval_result
 
