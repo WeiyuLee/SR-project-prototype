@@ -61,18 +61,19 @@ class config:
 			mconfig = {}
 			mconfig["grr_grid_srcnn_v1"] = {
 
-										"scale":[1],
+										"scale":[4],
 										"subimages":[20,20],
 										"padding":[6,6],
 										"ckpt_file":"/home/ubuntu/model/model/SR_project/SRCNN/SRCNN.model-309672",
 										"isGray": True,
-										"isNormallized":True
+										"isNormallized":True,
+										"upsample": False
 										}
 			return mconfig
 
 
 		eval_config = self.config["evaluation"]
-		eval_config["dataroot"] = '/home/ubuntu/dataset/SuperResolution'
+		eval_config["dataroot"] = './preprocess/Test'
 		eval_config["test_set"] = ["Set5"]
 		eval_config["models"] = [srcnn(self)]
 
