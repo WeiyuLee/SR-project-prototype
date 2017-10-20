@@ -415,7 +415,7 @@ class evaluation:
 def main_process():
 
 	parser = argparse.ArgumentParser()
-	parser.add_argument("-c", "--config", default="examples",help="Configuration name")
+	parser.add_argument("-c", "--config", default="example",help="Configuration name")
 	args = parser.parse_args()
 
 	eval_result = []

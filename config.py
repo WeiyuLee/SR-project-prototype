@@ -32,6 +32,29 @@ class config:
 
 	def example(self):
 
+		train_config = self.config["train"]
+
+		train_config["mode"] = "normal" # Operation mode: normal or freq [normal]
+		train_config["epoch"] = 10  # Number of epoch [10]
+		train_config["batch_size"] = 128 # The size of batch images [128]
+		train_config["image_size"] = 32 # The size of image to use [33]
+		train_config["label_size"] = 20 # The size of label to produce [21]
+		train_config["learning_rate"] = 1e-4 #The learning rate of gradient descent algorithm [1e-4]
+		train_config["color_dim"] = 1 # Dimension of image color. [1]
+		train_config["scale"] = 4 # The size of scale factor for preprocessing input image [3]
+		train_config["train_extract_stride"] = 14 #The size of stride to apply input image [14]
+		train_config["test_extract_stride"] = train_config["label_size"] #The size of stride to apply input image [14]
+		train_config["test_extract_stride"] # The size of stride to apply input image [14]
+		train_config["checkpoint_dir"] = "checkpoint" #Name of checkpoint directory [checkpoint]
+		train_config["output_dir"] = "output" # Name of sample directory [output]
+		train_config["train_dir"] =  "Train" # Name of train dataset directory
+		train_config["test_dir"] = "Test/Set5" # Name of test dataset directory [Test/Set5]
+		train_config["h5_dir"] = "preprocess/output" # Name of train dataset .h5 file
+		train_config["train_h5_name"] = "train" # Name of train dataset .h5 file
+		train_config["test_h5_name"] = "test" # Name of test dataset .h5 file
+		train_config["ckpt_name"] = "" # Name of checkpoints
+		train_config["is_train"] = True # True for training, False for testing [True]
+		train_config["model_ticket"] = "grr_grid_srcnn_v1" # Name of checkpoints
 
 		def srcnn(self):
 						
@@ -46,32 +69,6 @@ class config:
 										"isNormallized":True
 										}
 			return mconfig
-
-		train_config = self.config["train"]
-
-		train_config["mode"] = "normal"
-		train_config["epoch"] = 10
-		train_config["batch_size"] = 128
-		train_config["image_size"] = 32
-		train_config["label_size"] = 20
-		train_config["learning_rate"] = 1e-4
-		train_config["color_dim"] = 1
-		train_config["scale"] = 4
-		train_config["train_extract_stride"] = 14
-		train_config["test_extract_stride"] = train_config["label_size"]
-		train_config["test_extract_stride"]
-		train_config["checkpoint_dir"] = "checkpoint"
-		train_config["output_dir"] = "output"
-		train_config["train_dir"] =  "Train"
-		train_config["test_dir"] = "Test/Set5"
-		train_config["h5_dir"] = "preprocess/output"
-		train_config["train_h5_name"] = "train"
-		train_config["test_h5_name"] = "test"
-		train_config["ckpt_name"] = ""
-		train_config["is_train"] = True
-		train_config["model_ticket"] = "grr_grid_srcnn_v1" 
-
-
 
 
 		eval_config = self.config["evaluation"]
