@@ -6,8 +6,12 @@ preprocess_target = 'test';
 
 %% Set the data path
 Train_data_dir = './Train/';
-Test_data_dir = './Test/Set5/';
+%Test_data_dir = './Test/Set5/';
 %Test_data_dir = './Test/Set14/';
+Test_data_dir = './Test/BSD100/';
+
+%% Parameters
+scale = 2;
 
 %% DON'T MODIFY ANYTHING BELOWS
 
@@ -25,7 +29,7 @@ elseif (strcmp(preprocess_target, 'test'))
 end
 
 % Set parameters
-input_scale = 4;
+input_scale = scale;
 file_num = length(data_list);
 
 % Make dir to save the image
@@ -37,6 +41,7 @@ else
     mkdir(save_dir);
 end
 
+file_count = 0;
 for i = 3:file_num
     filename = [data_dir data_list(i).name];
     if(exist(filename, 'dir') ~= 7)
@@ -45,6 +50,7 @@ for i = 3:file_num
         continue;
     end
     
+    file_count = file_count + 1;
     % Only process Y channel
     if size(im_gnd, 3) > 1
         im_gnd = rgb2ycbcr(im_gnd);
@@ -68,4 +74,4 @@ for i = 3:file_num
     imwrite(uint8(im_gnd*255), [save_path '_label.bmp']);   
 end
 
-fprintf('File path: [%s], File number: [%d], Done! \n', data_dir, file_num-2);
+fprintf('File path: [%s], Scale: [%d], File number: [%d], Done! \n', data_dir, input_scale, file_count);
