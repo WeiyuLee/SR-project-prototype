@@ -7,11 +7,11 @@ preprocess_target = 'test';
 %% Set the data path
 Train_data_dir = './Train/';
 %Test_data_dir = './Test/Set5/';
-%Test_data_dir = './Test/Set14/';
-Test_data_dir = './Test/BSD100/';
+Test_data_dir = './Test/Set14/';
+%Test_data_dir = './Test/BSD100/';
 
 %% Parameters
-scale = 2;
+scale = 4;
 
 %% DON'T MODIFY ANYTHING BELOWS
 
@@ -63,14 +63,15 @@ for i = 3:file_num
     im_gnd = single(im_gnd) / 255;
     
     % Bicubic interpolation
-    im_input = imresize(im_gnd, 1/input_scale, 'bicubic');
-    im_input = imresize(im_input, size(im_gnd), 'bicubic');
+    im_input_raw = imresize(im_gnd, 1/input_scale, 'bicubic');
+    im_input = imresize(im_input_raw, size(im_gnd), 'bicubic');
     
     % Save images
     [pathstr,name,ext] = fileparts([data_dir data_list(i).name]);
     save_path = [save_dir name];
     
     imwrite(uint8(im_input*255), [save_path '_bicubic_scale_' num2str(input_scale) '_input.bmp']);
+    imwrite(uint8(im_input_raw*255), [save_path '_bicubic_scale_' num2str(input_scale) '_raw.bmp']);
     imwrite(uint8(im_gnd*255), [save_path '_label.bmp']);   
 end
 
