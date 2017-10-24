@@ -53,3 +53,7 @@ def batch_shuffle(data, label, batch_size):
     
     return data_shuffled, label_shuffled
 
+def log10(x):
+  numerator = tf.log(x)
+  denominator = tf.log(tf.constant(10, dtype=numerator.dtype))
+  return numerator / denominator

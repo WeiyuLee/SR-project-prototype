@@ -39,6 +39,7 @@ def main(_):
                       train_extract_stride=conf["train_extract_stride"],
                       test_extract_stride=conf["test_extract_stride"],
                       checkpoint_dir=conf["checkpoint_dir"],
+                      log_dir=conf["log_dir"],
                       output_dir=conf["output_dir"],
                       train_dir=conf["train_dir"],
                       test_dir=conf["test_dir"],

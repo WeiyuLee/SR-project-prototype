@@ -13,11 +13,11 @@ import os
 
 flags = tf.app.flags
 
-flags.DEFINE_string("mode", "normal", "operation mode: normal or freq [normal]")
+flags.DEFINE_string("mode", "small", "operation mode: normal or freq [normal]")
 
 flags.DEFINE_integer("scale", 4, "The size of scale factor for preprocessing input image [3]")
-flags.DEFINE_integer("image_size", 32, "The size of image to use [33]")
-flags.DEFINE_integer("label_size", 20, "The size of label to produce [21]")
+flags.DEFINE_integer("image_size", 64, "The size of image to use [33]")
+flags.DEFINE_integer("label_size", 64, "The size of label to produce [21]")
 flags.DEFINE_integer("color_dim", 1, "Dimension of image color. [1]")
 
 flags.DEFINE_integer("train_extract_stride", 14, "The size of stride to apply input image [14]")

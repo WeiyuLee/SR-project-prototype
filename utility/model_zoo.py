@@ -326,16 +326,54 @@ class model_zoo:
                final_output,\
                idx_shuffled      
     
-    def build_model(self):
-        model_list = ["googleLeNet_v1", "resNet_v1", "srcnn_v1", "grr_srcnn_v1", "grr_grid_srcnn_v1"]
+    def edsr_v1(self, kwargs):
+
+        scale = kwargs["scale"]
+        feature_size = kwargs["feature_size"]
+        scaling_factor = 0.1
+        num_resblock = 32
+            
+        model_params = {
+
+                        'conv1': [3,3,feature_size],
+                        'resblock': [3,3,feature_size],
+                        'conv2': [3,3,feature_size],
+                        }
+
+        with tf.name_scope("EDSR_v1"):       
+
+
+            net = nf.convolution_layer(self.inputs, model_params["conv1"], [1,1,1,1], name="conv1")
+            shortcut1 = net
+
+            with tf.name_scope("resblock"): 
+                resblock = []
+                [resblock.append(model_params['resblock']) for i in range(num_resblock)]
+                net = nf.edsr_resblock(net, resblock, repeations = num_resblock, scale = scaling_factor, name="resblock")
+            net = nf.convolution_layer(net, model_params["conv2"], [1,1,1,1], name="conv2")
+            net = net + shortcut1
+
+            with tf.name_scope("upsample"):
+                netowrk = nf.upsample(net, scale, feature_size, False,None)
+
+        return netowrk
+
+    def build_model(self, **kwargs):
+        model_list = ["googleLeNet_v1", "resNet_v1", "srcnn_v1", "grr_srcnn_v1", "grr_grid_srcnn_v1","edsr_v1"]
         
         if self.model_ticket not in model_list:
             print("sorry, wrong ticket!")
             return 0
         
         else:
-            fn = getattr(self, self.model_ticket)
-            netowrk = fn()
+
+           
+            fn = getattr(self,self.model_ticket)
+            
+            if kwargs == {}:
+                netowrk = fn()
+            else:
+                netowrk = fn(kwargs)
             return netowrk
         
         

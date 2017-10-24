@@ -1,4 +1,6 @@
 import tensorflow as tf
+import tensorflow.contrib.slim as slim
+
 import numpy as np
 
 import sys
@@ -125,119 +127,77 @@ def global_avg_pooling(inputs, flatten="False", name= 'global_avg_pooling'):
         
     return netout
     
-    
+   
 
-#def simple_shortcut_test():
-#    
-#    cifar10.maybe_download_and_extract()
-#        
-#    images_test, cls_test, labels_test = cifar10.load_test_data()
-#    images_test.astype(np.float32)
-#    
-#    
-#    model_params = {
-#            
-#            "conv1": [3,3, 64],
-#            "conv2": [3,3, 64],
-#            "conv3": [3,3,128],
-#            "conv4": [3,3, 28],
-#            
-#            
-#            }
-#    
-#    
-#    with tf.variable_scope("test"):
-#        
-#        x = tf.placeholder(tf.float32, shape=[None, 32, 32, 3], name='x')
-#        with tf.variable_scope("test"):
-#            
-#            x = tf.placeholder(tf.float32, shape=[None, 32, 32, 3], name='x')
-#           
-#            net1 = convolution_layer(x, model_params["conv1"], [1,1,1,1],name="conv1")
-#            net1 = convolution_layer(net1, model_params["conv2"], [1,1,1,1],name="conv2")
-#            net2 = convolution_layer(net1, model_params["conv4"], [1,2,2,1],name="conv3")
-#            net2 = convolution_layer(net2, model_params["conv3"], [1,1,1,1],name="conv4")
-#            
-#            net = shortcut(net2, net1, "s1")
-#            
-#            net_avg = global_avg_pooling(net)
-#            
-#        
-#        
-#        
-#    with tf.Session() as sess:
-#        
-#        sess.run(tf.global_variables_initializer())
-#        
-#        netout = sess.run([net, net_avg],feed_dict={x:images_test[0:5,:,:,:]})
-#        
-#    return netout
-#
-#a = simple_shortcut_test()     
-#        
-#
-#def simple_nettest():
-#
-#    
-#    cifar10.maybe_download_and_extract()
-#    
-#    images_test, cls_test, labels_test = cifar10.load_test_data()
-#    images_test.astype(np.float32)
-#    
-#    
-#    model_params = {
-#            
-#            "conv1": [5,5, 64],
-#            "conv2": [3,3,128],
-#            "inception_1":{                 
-#                    "1x1":64,
-#                    "3x3":{ "1x1":96,
-#                            "3x3":128
-#                            },
-#                    "5x5":{ "1x1":16,
-#                            "5x5":32
-#                            },
-#                    "s1x1":32
-#                    },
-#            "fc3": 128,
-#            "fc4": 10
-#            
-#            }
-#    
-#    
-#    with tf.variable_scope("test"):
-#        
-#        x = tf.placeholder(tf.float32, shape=[None, 32, 32, 3], name='x')
-#       
-#        net = convolution_layer(x, model_params["conv1"], [1,2,2,1],name="conv1")
-#        net = convolution_layer(net, model_params["conv2"], [1,1,1,1],name="conv2", flatten=False)
-#        
-#        net = inception_v1(net, model_params, name= "inception_1", flatten=True)
-#     
-#        net = fc_layer(net, model_params["fc3"], name="fc3")
-#        net = fc_layer(net, model_params["fc4"], name="fc4", activat_fn=None)
-#        
-#        
-#    
-#    with tf.Session() as sess:
-#        
-#        sess.run(tf.global_variables_initializer())
-#        
-#        
-#        netout = sess.run(net, feed_dict={x:images_test[0:5,:,:,:]})
-#        ut.print_operations_in_graph()
-#        
-#    return netout
+### EDSR Specialized function 
+def edsr_resblock(inputs, kernel_shape, stride = [1,1,1,1], repeations = 1, scale = 1, name="resblock"):
+
+    assert len(kernel_shape) == repeations, "Provide kernel shape shall be equal to repeations!"
+
+    for i in range(repeations):
+
+        with tf.name_scope(name + str(i)): 
+            pre_shape = inputs.get_shape()[-1]   
+            k_shape = kernel_shape[i]
+            rkernel_shape = [k_shape[0], k_shape[1], pre_shape, k_shape[2]]     
+            net = convolution_layer(inputs, rkernel_shape, stride, name= name + str(i) + "_1")
+            net = convolution_layer(net, rkernel_shape, stride, name= name + str(i)+ "_2".format(2), activat_fn=None)
+            net = net*scale
+            inputs = inputs + net
+
+
+    outputs = inputs
+
+    return outputs
+
+def upsample(x,scale=2,features=64,isColor=False,activation=tf.nn.relu):
+
+    assert scale in [2,3,4], "Only support scale 2,3,4"
+
+    if isColor : ch = 3
+    else: ch = 1
+
+    x = slim.conv2d(x,features,[3,3],activation_fn=activation)
+    if scale == 2:
+
+        ps_features = ch*(scale**2)
+        x = slim.conv2d(x,ps_features,[3,3],activation_fn=activation)
+        #x = slim.conv2d_transpose(x,ps_features,6,stride=1,activation_fn=activation)
+        x = PS(x,2,color=isColor)
+    elif scale == 3:
+        ps_features =ch*(scale**2)
+        x = slim.conv2d(x,ps_features,[3,3],activation_fn=activation)
+        #x = slim.conv2d_transpose(x,ps_features,9,stride=1,activation_fn=activation)
+        x = PS(x,3,color=isColor)
+    elif scale == 4:
+        ps_features = ch*(2**2)
+        for i in range(2):
+            x = slim.conv2d(x,ps_features,[3,3],activation_fn=activation)
+            #x = slim.conv2d_transpose(x,ps_features,6,stride=1,activation_fn=activation)
+            x = PS(x,2,color=isColor)
+    return x
+
+def _phase_shift(I, r):
+    bsize, a, b, c = I.get_shape().as_list()
+    bsize = tf.shape(I)[0] # Handling Dimension(None) type for undefined batch dim
+    X = tf.reshape(I, (bsize, a, b, r, r))
+    X = tf.transpose(X, (0, 1, 2, 4, 3))  # bsize, a, b, 1, 1
+    X = tf.split(X, a, 1)  # a, [bsize, b, r, r]
+    X = tf.concat([tf.squeeze(x, axis=1) for x in X],2)  # bsize, b, a*r, r
+    X = tf.split(X, b, 1)  # b, [bsize, a*r, r]
+    X = tf.concat([tf.squeeze(x, axis=1) for x in X],2)  # bsize, a*r, b*r
+    return tf.reshape(X, (bsize, a*r, b*r, 1))
+
+def PS(X, r, color=False):
+    if color:
+        Xc = tf.split(X, 3, 3)
+        X = tf.concat([_phase_shift(x, r) for x in Xc],3)
+    else:
+        X = _phase_shift(X, r)
+    return X
 
 
 
-
-#simpletest = simple_nettest() 
-
-    
-    
-    
-    
 
 
     

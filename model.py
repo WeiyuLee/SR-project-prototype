@@ -17,7 +17,8 @@ import model_zoo
 
 from utils import (
   read_data, 
-  batch_shuffle
+  batch_shuffle,
+  log10
 )
 
 class MODEL(object):
@@ -34,6 +35,7 @@ class MODEL(object):
                  train_extract_stride=14,
                  test_extract_stride=20,
                  checkpoint_dir=None, 
+                 log_dir=None,
                  output_dir=None,
                  train_dir=None,
                  test_dir=None,
@@ -76,6 +78,7 @@ class MODEL(object):
         self.test_extract_stride = test_extract_stride
     
         self.checkpoint_dir = checkpoint_dir
+        self.log_dir = log_dir
         self.output_dir = output_dir
         
         self.train_dir = train_dir
@@ -91,7 +94,7 @@ class MODEL(object):
         
         self.model_ticket = model_ticket
         
-        self.model_list = ["googleLeNet_v1", "resNet_v1", "srcnn_v1", "grr_srcnn_v1", "grr_grid_srcnn_v1"]
+        self.model_list = ["googleLeNet_v1", "resNet_v1", "srcnn_v1", "grr_srcnn_v1", "grr_grid_srcnn_v1", "edsr_v1"]
         
         self.build_model()        
     
@@ -382,7 +385,138 @@ class MODEL(object):
                 
                 avg_500_loss = [0]*(stage_size+1)
                 avg_gird_loss = [0]*4
-                avg_final_loss = 0        
+                avg_final_loss = 0     
+
+    def build_edsr_v1(self):###
+        """
+        Build SRCNN model
+        """        
+        # Define input and label images
+        self.input = tf.placeholder(tf.float32, [None, self.image_size, self.image_size, self.color_dim], name='images')
+        self.image_target = tf.placeholder(tf.float32, [None, self.label_size, self.label_size, self.color_dim], name='labels')
+        self.dropout = tf.placeholder(tf.float32, name='dropout')
+        
+        # Initial model_zoo
+        mz = model_zoo.model_zoo(self.input, self.dropout, self.is_train, self.model_ticket)
+        
+        # Build model
+        self.logits = mz.build_model(scale=4,feature_size = 256)
+        self.l1_loss = tf.reduce_mean(tf.losses.absolute_difference(self.image_target,self.logits ))
+        self.train_op = tf.train.AdamOptimizer(self.learning_rate).minimize(self.l1_loss)
+
+        mse = tf.reduce_mean(tf.square(self.image_target - self.logits))
+        #mse =  tf.reduce_mean(tf.squared_difference(self.image_target,self.logits))    
+        
+        
+        with tf.name_scope('train_summary'):
+            tf.summary.scalar("loss", self.l1_loss, collections=['train'])
+            tf.summary.scalar("MSE", mse, collections=['train'])
+            tf.summary.image("input_image",self.input, collections=['train'])
+            tf.summary.image("target_image",self.image_target, collections=['train'])
+            tf.summary.image("output_image",self.logits, collections=['train'])
+            
+            self.merged_summary_train = tf.summary.merge_all('train')          
+            
+        with tf.name_scope('test_summary'):
+            tf.summary.scalar("loss", self.l1_loss, collections=['test'])
+            tf.summary.scalar("MSE", mse, collections=['test'])
+            tf.summary.image("input_image",self.input, collections=['test'])
+            tf.summary.image("target_image",self.image_target, collections=['test'])
+            tf.summary.image("output_image",self.logits, collections=['test'])
+
+            self.merged_summary_test = tf.summary.merge_all('test')                 
+        
+        self.saver = tf.train.Saver()        
+        
+    def train_edsr_v1(self):
+        """
+        Training process.
+        """     
+        print("Training...")
+
+        # Define dataset path
+        self.train_h5_name = self.train_h5_name + "_[{}]_scale_{}_size_{}.h5".format(self.mode, self.scale, self.label_size)
+        self.test_h5_name = self.test_h5_name + "_[{}]_scale_{}_size_{}.h5".format(self.mode, self.scale, self.label_size)
+        
+        train_data_dir = os.path.join(self.h5_dir,self.train_h5_name)
+        test_data_dir = os.path.join(self.h5_dir,self.test_h5_name)
+        
+        # Read data from .h5 file
+        train_data, train_label, freq_label = read_data(train_data_dir)
+        test_data, test_label, freq_label = read_data(test_data_dir)
+
+        summary_writer = tf.summary.FileWriter(self.log_dir, self.sess.graph)    
+    
+        self.sess.run(tf.global_variables_initializer())
+
+        if self.load_ckpt(self.checkpoint_dir, ""):
+            print(" [*] Load SUCCESS")
+        else:
+            print(" [!] Load failed...")
+
+        train_data = self.sess.run(tf.image.resize_images(train_data, [self.image_size, self.image_size]))
+        test_data = self.sess.run(tf.image.resize_images(test_data, [self.image_size, self.image_size]))
+
+        
+
+        # Define iteration counter, timer and average loss
+        itera_counter = 0
+        train_batch_num = len(train_data) // self.batch_size
+
+        epoch_pbar = tqdm(range(self.epoch))
+        for ep in epoch_pbar:            
+            # Run by batch images
+            train_data, train_label = batch_shuffle(train_data, train_label, self.batch_size)
+            test_data, test_label = batch_shuffle(test_data, test_label, self.batch_size)
+
+            epoch_pbar.set_description("Epoch: [%2d]" % ((ep+1)))
+            epoch_pbar.refresh()
+        
+            batch_pbar = tqdm(range(0, train_batch_num), desc="Batch: [0]")
+            for idx in batch_pbar:                
+                itera_counter += 1
+                  
+                # Get the training data
+                batch_images = train_data[idx*self.batch_size : (idx+1)*self.batch_size]
+                batch_labels = train_label[idx*self.batch_size : (idx+1)*self.batch_size]     
+                batch_test_images =  test_data[:self.batch_size] 
+                batch_test_labels = test_label[:self.batch_size]
+                
+                # Run the model
+                _, train_loss = self.sess.run([self.train_op, self.l1_loss],
+                                                                             feed_dict={self.input: batch_images, 
+                                                                                        self.image_target: batch_labels,
+                                                                                        self.dropout: 1.})
+                                                           
+    
+                batch_pbar.set_description("Batch: [%2d], L1:%.2f" % (idx+1, train_loss))
+                #batch_pbar.refresh()
+            
+            if ep % 1 == 0:
+                self.save_ckpt(self.checkpoint_dir, self.ckpt_name, itera_counter)
+                
+                _,  train_sum, train_loss = self.sess.run([self.train_op, self.merged_summary_train, self.l1_loss], 
+                                                                                                    feed_dict={
+                                                                                                        self.input: batch_images, 
+                                                                                                        self.image_target: batch_labels,
+                                                                                                        self.dropout: 1.
+                                                                                                                       })
+                test_sum, test_loss = self.sess.run([self.merged_summary_test, self.l1_loss], 
+                                                                                                feed_dict={
+                                                                                                    self.input: batch_test_images, 
+                                                                                                    self.image_target: batch_test_labels,
+                                                                                                    self.dropout: 1.})
+                                                                                                                       
+
+               
+                    
+                print("Epoch: [{}], Train_loss: {}".format((ep+1), train_loss))     
+                print("Epoch: [{}], Test_loss: {}".format((ep+1), test_loss))  
+                
+                
+                summary_writer.add_summary(train_sum, ep)
+                summary_writer.add_summary(test_sum, ep)
+                
                 
     def save_ckpt(self, checkpoint_dir, ckpt_name, step):
         """
@@ -391,7 +525,7 @@ class MODEL(object):
         """          
         
         print(" [*] Saving checkpoints...step: [{}]".format(step))
-        model_name = "SRCNN.model"
+        model_name = ckpt_name
         
         if ckpt_name == "":
             model_dir = "%s_%s_%s" % ("srcnn", "scale", self.scale)
@@ -423,7 +557,7 @@ class MODEL(object):
     
         ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
         
-        if ckpt and ckpt.model_checkpoint_path:
+        if ckpt  and ckpt.model_checkpoint_path:
             ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
             self.saver.restore(self.sess, os.path.join(checkpoint_dir, ckpt_name))
         

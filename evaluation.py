@@ -210,10 +210,8 @@ class evaluation:
         self.becnchmark = becnchmark()
         self.subimg_size = subimg_size
         self.padding_size = padding_size
-        self.inputs = tf.placeholder(tf.float32, [	None,
-        											subimg_size[0]+padding_size[0]*2, 
-        											subimg_size[1]+padding_size[1]*2,
-        											channel])
+        self.channel = channel
+        
 
     def dataset_setup(self):
         """
@@ -284,8 +282,18 @@ class evaluation:
 
     def load_model(self, model_ticket, ckpt_file):
 
+
+
+        tf.reset_default_graph() 
+
+        self.inputs = tf.placeholder(tf.float32, [  None,
+                                                    self.subimg_size[0]+self.padding_size[0]*2, 
+                                                    self.subimg_size[1]+self.padding_size[1]*2,
+                                                    self.channel])
+
+
         mz = model_zoo.model_zoo(self.inputs, None, False, model_ticket)    
-        model_prediction = mz.build_model()
+        model_prediction = mz.build_model(scale=4,feature_size = 256)
         sess = tf.Session()
         saver = tf.train.Saver()
         saver.restore(sess, ckpt_file)
@@ -298,10 +306,10 @@ class evaluation:
         run model in model_ticket_list and return prediction
         """
             
-        predicted,_,_,_= sess.run(model_prediction, feed_dict = {self.inputs:image})
+        predicted = sess.run(model_prediction, feed_dict = {self.inputs:image})
             
 
-        return predicted[2]
+        return predicted
 
 
 
@@ -316,6 +324,8 @@ class evaluation:
         bechmark_val = {}
         padding_size = self.padding_size
         subimg_size = self.subimg_size
+
+        set_model = []
 
         for set_key in dataset_pair:
             dataset = dataset_pair[set_key]
@@ -395,6 +405,7 @@ class evaluation:
 
                             up_padding_size = [padding_size[0]*scale, padding_size[1]*scale]
                             up_subimg_size = [subimg_size[0]*scale, subimg_size[1]*scale]
+
 
                             sess, model_prediction = self.load_model(mkey,model_dict[mkey]["ckpt_file"])
 
@@ -478,6 +489,7 @@ def main_process():
 
     conf = config.config(args.config).config
 
+    print(conf["evaluation"]["models"])
     
     for midx in range(len(conf["evaluation"]["models"])):
 

@@ -134,7 +134,9 @@ class PRPRC(object):
         preprocessed_folder = "preprocessed_scale_{}".format(self.scale)
         
         # Define the preprocessed ext.              
+        #input_data_ext = "*_bicubic_scale_{}_input.bmp".format(self.scale)
         input_data_ext = "*_bicubic_scale_{}_input.bmp".format(self.scale)
+        #input_data_ext = "*_label.bmp".format(self.scale)
         label_data_ext = "*_label.bmp".format(self.scale)
     
         data_dir = os.path.join(os.getcwd(), data_dir, preprocessed_folder)
