@@ -191,18 +191,21 @@ class model_zoo:
             "stg3_conv2": [1, 1, 32],
             "stg3_conv3": [5, 5, 1],              
             
-            # Grid 
-            "grid_conv1": [7, 7, 64],
-            "grid_conv2": [1, 1, 32],
-            "grid_conv3": [3, 3, 1],                   
+            # HF Stage 
+            "HF_conv1": [9, 9, 64],
+            "HF_conv2": [1, 1, 32],
+            "HF_conv3": [5, 5, 1],   
+
+            # LF Stage 
+            "LF_conv1": [9, 9, 64],
+            "LF_conv2": [1, 1, 32],
+            "LF_conv3": [5, 5, 1],                 
         }                
         
         with tf.name_scope("grr_grid_srcnn_v1"):           
  
             init = tf.random_normal_initializer(mean=0, stddev=1e-3)
             padding = 6
-            padding_grid = 4
-            #print(self.inputs.shape)
 
             # Stage 1                        
             stg1_input = self.inputs
@@ -211,12 +214,10 @@ class model_zoo:
             stg1_layer2_output = nf.convolution_layer(stg1_layer1_output, model_params["stg1_conv2"], [1,1,1,1], name="stg1_conv2", padding="SAME", initializer=init)
             stg1_layer3_output = nf.convolution_layer(stg1_layer2_output, model_params["stg1_conv3"], [1,1,1,1], name="stg1_conv3", padding="SAME", initializer=init, activat_fn=None)
 
-            #stg1_layer3_output = tf.pad(stg1_layer3_output, [[0, 0], [padding, padding], [padding, padding], [0, 0]], "CONSTANT")
+            stg1_layer3_output = tf.add(stg1_input, stg1_layer3_output) ## multi-stg_1
                        
-            stg1_layer3_output = tf.add(self.inputs, stg1_layer3_output) ## multi-stg_1
-            
-            stg1_output = stg1_layer3_output
             #stg1_output = tf.stop_gradient(stg1_layer3_output)
+            stg1_output = stg1_layer3_output
 
             # Stage 2            
             stg2_input = stg1_output
@@ -225,12 +226,10 @@ class model_zoo:
             stg2_layer2_output = nf.convolution_layer(stg2_layer1_output, model_params["stg2_conv2"], [1,1,1,1], name="stg2_conv2", padding="SAME", initializer=init)
             stg2_layer3_output = nf.convolution_layer(stg2_layer2_output, model_params["stg2_conv3"], [1,1,1,1], name="stg2_conv3", padding="SAME", initializer=init, activat_fn=None)
             
-            #stg2_layer3_output = tf.pad(stg2_layer3_output, [[0, 0], [padding, padding], [padding, padding], [0, 0]], "CONSTANT")
-            
             stg2_layer3_output = tf.add(stg1_output, stg2_layer3_output) ## multi-stg_2
             
-            stg2_output = stg2_layer3_output
             #stg2_output = tf.stop_gradient(stg2_layer3_output)
+            stg2_output = stg2_layer3_output
 
             # Stage 3
             stg3_input = stg2_output
@@ -242,89 +241,36 @@ class model_zoo:
             stg3_layer3_output = tf.add(stg2_output[:, padding:-padding, padding:-padding,:], stg3_layer3_output) ## multi-stg_3
             
             stg3_output = tf.stop_gradient(stg3_layer3_output)
+            #stg3_output = stg3_layer3_output
             
-            #stg3_layer3_output_pad = tf.pad(stg3_layer3_output, [[0, 0], [padding, padding], [padding, padding], [0, 0]], "REFLECT")
-            #print(stg3_layer3_output_pad.get_shape)
+            HF_thrld = tf.constant(13, dtype=tf.float32)
+            TV_stg3_output = tf.image.total_variation(stg3_output)
             
-            stg3_layer3_size = stg3_layer3_output.get_shape()
-            grid_h = stg3_layer3_size[1] // 2
-            grid_w = stg3_layer3_size[2] // 2
+            HF_cond = tf.greater_equal(TV_stg3_output, HF_thrld)
+            LF_cond = tf.less(TV_stg3_output, HF_thrld)
             
-            grid1_input = stg3_output[:, 0:grid_h,    0:grid_w,   :]
-            grid2_input = stg3_output[:, 0:grid_h,    grid_w:,    :]
-            grid3_input = stg3_output[:, grid_h:,     0:grid_w,   :]
-            grid4_input = stg3_output[:, grid_h:,     grid_w:,    :]
+            HF_indices = tf.where(HF_cond)
+            LF_indices = tf.where(LF_cond)
             
-            grid1_input = tf.pad(grid1_input, [[0, 0], [padding_grid, padding_grid], [padding_grid, padding_grid], [0, 0]], "SYMMETRIC")
-            grid2_input = tf.pad(grid2_input, [[0, 0], [padding_grid, padding_grid], [padding_grid, padding_grid], [0, 0]], "SYMMETRIC")
-            grid3_input = tf.pad(grid3_input, [[0, 0], [padding_grid, padding_grid], [padding_grid, padding_grid], [0, 0]], "SYMMETRIC")
-            grid4_input = tf.pad(grid4_input, [[0, 0], [padding_grid, padding_grid], [padding_grid, padding_grid], [0, 0]], "SYMMETRIC")
+            # HF Stage
+            HF_input = tf.squeeze(tf.gather(stg3_output, HF_indices), 1)
+            #HF_input = tf.pad(HF_input, [[0, 0], [padding, padding], [padding, padding], [0, 0]], "REFLECT")
+            HF_input = tf.pad(HF_input, [[0, 0], [padding, padding], [padding, padding], [0, 0]], "CONSTANT")
             
-            #print(grid1_input.get_shape())
-            #print(grid2_input.get_shape())
-            #print(grid3_input.get_shape())
-            #print(grid4_input.get_shape())
+            HF_layer1_output = nf.convolution_layer(HF_input,         model_params["HF_conv1"], [1,1,1,1], name="HF_conv1", padding="VALID", initializer=init)           
+            HF_layer2_output = nf.convolution_layer(HF_layer1_output, model_params["HF_conv2"], [1,1,1,1], name="HF_conv2", padding="VALID", initializer=init)
+            HF_layer3_output = nf.convolution_layer(HF_layer2_output, model_params["HF_conv3"], [1,1,1,1], name="HF_conv3", padding="VALID", initializer=init, activat_fn=None)            
             
-            grid_input = [grid1_input, grid2_input, grid3_input, grid4_input]
+            # Get LF
+            LF_output = tf.squeeze(tf.gather(stg3_output, LF_indices), 1)
             
-            #FFT Grids
-            #FFT = [[],[],[]],[]
+            # Get Final output
+            final_output = tf.concat([LF_output, HF_layer3_output], 0)
             
-            #if FFT > 0:
-                #network1
+            print(final_output.shape)
             
-            idx = tf.constant([0, 1, 2, 3])
-            idx_shuffled = tf.random_shuffle(idx)
-            grid_input_shuffled = tf.gather(grid_input, idx_shuffled)
-            
-            grid_output = [None]*4
-            
-            # Grid 1
-            grid1_layer1_output = nf.convolution_layer(grid_input_shuffled[0], model_params["grid_conv1"], [1,1,1,1], name="grid1_conv1", padding="VALID", initializer=init)           
-            grid1_layer2_output = nf.convolution_layer(grid1_layer1_output, model_params["grid_conv2"], [1,1,1,1], name="grid1_conv2", padding="VALID", initializer=init)
-            grid1_layer3_output = nf.convolution_layer(grid1_layer2_output, model_params["grid_conv3"], [1,1,1,1], name="grid1_conv3", padding="VALID", initializer=init, activat_fn=None)
-            grid_output[0] = grid1_layer3_output
-            
-            # Grid 2
-            grid2_layer1_output = nf.convolution_layer(grid_input_shuffled[1], model_params["grid_conv1"], [1,1,1,1], name="grid2_conv1", padding="VALID", initializer=init)           
-            grid2_layer2_output = nf.convolution_layer(grid2_layer1_output, model_params["grid_conv2"], [1,1,1,1], name="grid2_conv2", padding="VALID", initializer=init)
-            grid2_layer3_output = nf.convolution_layer(grid2_layer2_output, model_params["grid_conv3"], [1,1,1,1], name="grid2_conv3", padding="VALID", initializer=init, activat_fn=None)
-            grid_output[1] = grid2_layer3_output
-            
-            # Grid 3
-            grid3_layer1_output = nf.convolution_layer(grid_input_shuffled[2], model_params["grid_conv1"], [1,1,1,1], name="grid3_conv1", padding="VALID", initializer=init)           
-            grid3_layer2_output = nf.convolution_layer(grid3_layer1_output, model_params["grid_conv2"], [1,1,1,1], name="grid3_conv2", padding="VALID", initializer=init)
-            grid3_layer3_output = nf.convolution_layer(grid3_layer2_output, model_params["grid_conv3"], [1,1,1,1], name="grid3_conv3", padding="VALID", initializer=init, activat_fn=None)
-            grid_output[2] = grid3_layer3_output
-
-            # Grid 4
-            grid4_layer1_output = nf.convolution_layer(grid_input_shuffled[3], model_params["grid_conv1"], [1,1,1,1], name="grid4_conv1", padding="VALID", initializer=init)           
-            grid4_layer2_output = nf.convolution_layer(grid4_layer1_output, model_params["grid_conv2"], [1,1,1,1], name="grid4_conv2", padding="VALID", initializer=init)
-            grid4_layer3_output = nf.convolution_layer(grid4_layer2_output, model_params["grid_conv3"], [1,1,1,1], name="grid4_conv3", padding="VALID", initializer=init, activat_fn=None)            
-            grid_output[3] = grid4_layer3_output  
-            
-#            idx_shuffled = idx_shuffled.eval()
-#            print(idx_shuffled)
-            
-            idx_grid_dict = {idx_shuffled[i]:grid_output[i] for i in range(4)}
-            grid_output_reorder = tf.gather(grid_output, tf.nn.top_k(-idx_shuffled, k=4).indices)
-            
-            #print(grid1_layer3_output.get_shape())
-            #print(grid2_layer3_output.get_shape())
-            #print(idx_grid_dict)
-            
-            tmp_output1 = tf.concat([grid_output_reorder[0], grid_output_reorder[1]], 2)
-            tmp_output2 = tf.concat([grid_output_reorder[2], grid_output_reorder[3]], 2)
-            final_output = tf.concat([tmp_output1, tmp_output2], 1)
-            
-            #print(tmp_output1.get_shape())
-            #print(tmp_output2.get_shape())
-            #print(final_output.get_shape())
-            
-        return (stg1_layer3_output, stg2_layer3_output, stg3_layer3_output),\
-               (grid1_layer3_output, grid2_layer3_output, grid3_layer3_output, grid4_layer3_output),\
-               final_output,\
-               idx_shuffled      
+        return (stg1_layer3_output, stg2_layer3_output, stg3_layer3_output), (HF_layer3_output, LF_output), (HF_indices, LF_indices), TV_stg3_output
+#               (HF_input, LF_input)
     
     def edsr_v1(self, kwargs):
 

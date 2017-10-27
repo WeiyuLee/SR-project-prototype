@@ -117,10 +117,38 @@ class MODEL(object):
             fn = getattr(self, "train_" + self.model_ticket)
             function = fn()
             return function                 
-    
-    def build_grr_grid_srcnn_v1(self):###
+
+    def build_srcnn_v1(self):###
         """
-        Build SRCNN model
+        Build srcnn_v1 model
+        """   
+        # Define input and label images
+        self.images = tf.placeholder(tf.float32, [None, self.image_size, self.image_size, self.color_dim], name='images')
+        self.labels = tf.placeholder(tf.float32, [None, self.label_size, self.label_size, self.color_dim], name='labels')
+        self.dropout = tf.placeholder(tf.float32, name='dropout')
+        
+        # Initial model_zoo
+        mz = model_zoo.model_zoo(self.images, self.dropout, self.is_train, self.model_ticket)
+        
+        # Build model
+        self.pred = mz.build_model()
+                         
+        # Define loss function (MSE) 
+        self.loss = tf.reduce_mean(tf.square(self.labels - self.pred))
+            
+        with tf.name_scope('train_summary'):
+            tf.summary.scalar("loss", self.loss, collections=['train'])
+            self.merged_summary_train = tf.summary.merge_all('train')   
+
+        with tf.name_scope('test_summary'):
+            tf.summary.scalar("loss", self.loss, collections=['test'])
+            self.merged_summary_test = tf.summary.merge_all('test')             
+                    
+        self.saver = tf.train.Saver()     
+
+    def build_grr_srcnn_v1(self):###
+        """
+        Build grr_srcnn_v1 model
         """        
         # Define input and label images
         self.images = tf.placeholder(tf.float32, [None, self.image_size, self.image_size, self.color_dim], name='images')
@@ -133,64 +161,97 @@ class MODEL(object):
         mz = model_zoo.model_zoo(self.images, self.dropout, self.is_train, self.model_ticket)
         
         # Build model
-        self.stg_pred, self.grid_pred, self.pred, idx_shuffled = mz.build_model()
+        self.stg1_pred, self.stg2_pred, self.stg3_pred = mz.build_model()
+                  
+        padding = 6
+        
+        # Define loss function (MSE) 
+        ## Stage 1 loss:
+        self.stg1_loss = tf.reduce_mean(tf.square(self.stg1_labels[:, padding:-padding, padding:-padding, :] - self.stg1_pred[:, padding:-padding, padding:-padding, :]))
+        ## Stage 2 loss:
+        self.stg2_loss = tf.reduce_mean(tf.square(self.stg2_labels[:, padding:-padding, padding:-padding, :] - self.stg2_pred[:, padding:-padding, padding:-padding, :]))    
+        ## Stage 3 loss:
+        self.stg3_loss = tf.reduce_mean(tf.square(self.stg3_labels - self.stg3_pred))
+    
+        self.all_stg_loss = tf.add(tf.add(self.stg1_loss, self.stg2_loss), self.stg3_loss)
+
+        with tf.name_scope('train_summary'):
+            tf.summary.scalar("Stg1 loss", self.stg1_loss, collections=['train'])
+            tf.summary.scalar("Stg2 loss", self.stg2_loss, collections=['train'])
+            tf.summary.scalar("Stg3 loss", self.stg3_loss, collections=['train'])
+            self.merged_summary_train = tf.summary.merge_all('train')                        
+
+        with tf.name_scope('test_summary'):
+            tf.summary.scalar("Stg1 loss", self.stg1_loss, collections=['test'])
+            tf.summary.scalar("Stg2 loss", self.stg2_loss, collections=['test'])
+            tf.summary.scalar("Stg3 loss", self.stg3_loss, collections=['test'])
+            self.merged_summary_test = tf.summary.merge_all('test')         
+            
+        self.saver = tf.train.Saver()
+    
+    def build_grr_grid_srcnn_v1(self):###
+        """
+        Build grr_grid_srcnn_v1 model
+        """        
+        # Define input and label images
+        self.images = tf.placeholder(tf.float32, [None, self.image_size, self.image_size, self.color_dim], name='images')
+        self.stg1_labels = tf.placeholder(tf.float32, [None, self.image_size, self.image_size, self.color_dim], name='stg1_labels')
+        self.stg2_labels = tf.placeholder(tf.float32, [None, self.image_size, self.image_size, self.color_dim], name='stg2_labels')
+        self.stg3_labels = tf.placeholder(tf.float32, [None, self.label_size, self.label_size, self.color_dim], name='stg3_labels')
+        self.dropout = tf.placeholder(tf.float32, name='dropout')
+        
+        self.inputs = self.images
+        
+        # Initial model_zoo
+        mz = model_zoo.model_zoo(self.inputs, self.dropout, self.is_train, self.model_ticket)
+        
+        # Build model
+        self.stg_pred, self.HFLF_pred, self.HFLF_idx, self.TV_stg3_output = mz.build_model()
+                         
+        padding = 6
            
         # Define loss function (MSE) 
         ## Stage 1 loss:
-        self.stg1_loss = tf.reduce_mean(tf.square(self.stg1_labels - self.stg_pred[0]))
+        self.stg1_loss = tf.reduce_mean(tf.square(self.stg1_labels[:, padding:-padding, padding:-padding, :] - self.stg_pred[0][:, padding:-padding, padding:-padding, :]))
         ## Stage 2 loss:
-        self.stg2_loss = tf.reduce_mean(tf.square(self.stg2_labels - self.stg_pred[1]))    
+        self.stg2_loss = tf.reduce_mean(tf.square(self.stg2_labels[:, padding:-padding, padding:-padding, :] - self.stg_pred[1][:, padding:-padding, padding:-padding, :]))    
         ## Stage 3 loss:
         self.stg3_loss = tf.reduce_mean(tf.square(self.stg3_labels - self.stg_pred[2]))
     
         self.all_stg_loss = tf.add(tf.add(self.stg1_loss, self.stg2_loss), self.stg3_loss)
 
-        stg3_label_size = self.stg3_labels.get_shape()
-        grid_h = stg3_label_size[1] // 2
-        grid_w = stg3_label_size[2] // 2
+        ## HF loss
+        self.HF_labels = tf.squeeze(tf.gather(self.stg3_labels, self.HFLF_idx[0]), 1)
+        self.HF_loss = tf.reduce_mean(tf.square(self.HF_labels - self.HFLF_pred[0]))
 
-        grid_label = [None]*4
-        grid_label[0] = self.stg3_labels[:, 0:grid_h,                                 0:grid_w,                                 :]
-        grid_label[1] = self.stg3_labels[:, 0:grid_h,                                 grid_w:,                                  :]
-        grid_label[2] = self.stg3_labels[:, grid_h:,                                  0:grid_w,                                 :]
-        grid_label[3] = self.stg3_labels[:, grid_h:,                                  grid_w:,                                  :]
-        self.grid_label_reorder = tf.gather(grid_label, idx_shuffled)
+        self.before_HF_pred = tf.squeeze(tf.gather(self.stg_pred[2], self.HFLF_idx[0]), 1)
+        self.before_HF_loss = tf.reduce_mean(tf.square(self.HF_labels - self.before_HF_pred))       
 
-        ## Grid 1 loss:
-        self.grid1_loss = tf.reduce_mean(tf.square(self.grid_label_reorder[0] - self.grid_pred[0]))
-        ## Grid 2 loss:
-        self.grid2_loss = tf.reduce_mean(tf.square(self.grid_label_reorder[1] - self.grid_pred[1]))
-        ## Grid 3 loss:
-        self.grid3_loss = tf.reduce_mean(tf.square(self.grid_label_reorder[2] - self.grid_pred[2]))
-        ## Grid 4 loss:
-        self.grid4_loss = tf.reduce_mean(tf.square(self.grid_label_reorder[3] - self.grid_pred[3]))        
-        
-        ## Final total loss
-        self.final_loss = tf.add(tf.add(tf.add(self.grid1_loss, self.grid2_loss), self.grid3_loss), self.grid4_loss) / 4
+        ## LF loss
+        self.LF_labels = tf.squeeze(tf.gather(self.stg3_labels, self.HFLF_idx[1]), 1)
+        self.LF_loss = tf.reduce_mean(tf.square(self.LF_labels - self.HFLF_pred[1]))
         
         with tf.name_scope('train_summary'):
             tf.summary.scalar("Stg1 loss", self.stg1_loss, collections=['train'])
             tf.summary.scalar("Stg2 loss", self.stg2_loss, collections=['train'])
             tf.summary.scalar("Stg3 loss", self.stg3_loss, collections=['train'])
-            tf.summary.scalar("Grid1 loss", self.grid1_loss, collections=['train'])
-            tf.summary.scalar("Grid2 loss", self.grid2_loss, collections=['train'])
-            tf.summary.scalar("Grid3 loss", self.grid3_loss, collections=['train'])
-            tf.summary.scalar("Grid4 loss", self.grid4_loss, collections=['train'])
+            tf.summary.scalar("HF loss", self.HF_loss, collections=['train'])
+            tf.summary.scalar("LF loss", self.LF_loss, collections=['train'])
+            tf.summary.scalar("Final loss", self.stg3_loss, collections=['train'])
             self.merged_summary_train = tf.summary.merge_all('train')          
             
         with tf.name_scope('test_summary'):
             tf.summary.scalar("Stg1 loss", self.stg1_loss, collections=['test'])
             tf.summary.scalar("Stg2 loss", self.stg2_loss, collections=['test'])
             tf.summary.scalar("Stg3 loss", self.stg3_loss, collections=['test'])
-            tf.summary.scalar("Grid1 loss", self.grid1_loss, collections=['test'])
-            tf.summary.scalar("Grid2 loss", self.grid2_loss, collections=['test'])
-            tf.summary.scalar("Grid3 loss", self.grid3_loss, collections=['test'])
-            tf.summary.scalar("Grid4 loss", self.grid4_loss, collections=['test'])
+            tf.summary.scalar("HF loss", self.HF_loss, collections=['test'])
+            tf.summary.scalar("LF loss", self.LF_loss, collections=['test'])
+            tf.summary.scalar("Final loss", self.stg3_loss, collections=['test'])
             self.merged_summary_test = tf.summary.merge_all('test')                 
         
         self.saver = tf.train.Saver()        
-        
-    def train_grr_grid_srcnn_v1(self):
+
+    def train_srcnn_v1(self):
         """
         Training process.
         """     
@@ -206,45 +267,120 @@ class MODEL(object):
         test_data_dir = os.path.join('./{}'.format(self.h5_dir), self.test_h5_name)
         
         # Read data from .h5 file
-        train_data, train_label, freq_label = read_data(train_data_dir)
-        test_data, test_label, freq_label = read_data(test_data_dir)
-        
+        train_data, train_label = read_data(train_data_dir)
+        test_data, test_label = read_data(test_data_dir)
+
+        # Stochastic gradient descent with the standard backpropagation       
+        ## Stage loss 
+        self.train_op = tf.train.AdamOptimizer(self.learning_rate).minimize(self.loss)
+
+        summary_writer = tf.summary.FileWriter('log', self.sess.graph)    
     
-        # Get the trainable variables
-        vars = tf.trainable_variables()
+        self.sess.run(tf.global_variables_initializer())
 
-        grid1 = [v for v in vars if v.name.startswith("grid1_conv1")]            
-        grid1 += [v for v in vars if v.name.startswith("grid1_conv2")]            
-        grid1 += [v for v in vars if v.name.startswith("grid1_conv3")]            
-
-        grid2 = [v for v in vars if v.name.startswith("grid2_conv1")]            
-        grid2 += [v for v in vars if v.name.startswith("grid2_conv2")]            
-        grid2 += [v for v in vars if v.name.startswith("grid2_conv3")]  
+        # Define iteration counter, timer and average loss
+        itera_counter = 0
+        avg_500_loss = 0
+        avg_loss = 0
         
-        grid3 = [v for v in vars if v.name.startswith("grid3_conv1")]            
-        grid3 += [v for v in vars if v.name.startswith("grid3_conv2")]            
-        grid3 += [v for v in vars if v.name.startswith("grid3_conv3")]  
+        # Load checkpoint 
+        if self.load_ckpt(self.checkpoint_dir, self.ckpt_name):
+            print(" [*] Load SUCCESS")
+        else:
+            print(" [!] Load failed...")
+             
+        batch_labels = [None]*stage_size  
 
-        grid4 = [v for v in vars if v.name.startswith("grid4_conv1")]            
-        grid4 += [v for v in vars if v.name.startswith("grid4_conv2")]            
-        grid4 += [v for v in vars if v.name.startswith("grid4_conv3")]  
+        train_batch_num = len(train_data) // self.batch_size
+        
+        padding = (self.image_size - self.label_size) // 2 # 6
+
+        # Prerpare validation data       
+        val_images = test_data;
+        val_labels = test_label[:, padding:-padding, padding:-padding, :]
+
+        epoch_pbar = tqdm(range(self.epoch))
+        for ep in epoch_pbar:            
+            # Run by batch images
+            train_data, train_label = batch_shuffle(train_data, train_label, self.batch_size)
+
+            epoch_pbar.set_description("Epoch: [%2d]" % ((ep+1)))
+            epoch_pbar.refresh()
+        
+            batch_pbar = tqdm(range(0, train_batch_num), desc="Batch: [0]")
+            for idx in batch_pbar:                
+                itera_counter += 1
+                  
+                # Get the training data
+                batch_images = train_data[idx*self.batch_size : (idx+1)*self.batch_size]
+                batch_images = np.array(batch_images)
+
+                batch_labels = np.array(train_label[idx*self.batch_size : (idx+1)*self.batch_size])
+                batch_labels = batch_labels[:, padding:-padding, padding:-padding, :]          
+                
+                # Run the model
+                train_sum, _, train_err = self.sess.run([self.merged_summary_train,
+                                                         self.train_op, 
+                                                         self.loss],
+                                                         feed_dict={
+                                                                     self.images: batch_images, 
+                                                                     self.labels: batch_labels,
+                                                                     self.dropout: 1.
+                                                                   })   
+
+                avg_loss += train_err
+                avg_500_loss += train_err
+                   
+                batch_pbar.set_description("Batch: [%2d]" % (idx+1))
+            
+            if ep % 5 == 0:
+                self.save_ckpt(self.checkpoint_dir, self.ckpt_name, itera_counter)
+                
+                # Validation
+                ## Run the test images
+                test_sum, val_err = self.sess.run([self.merged_summary_test,
+                                                   self.loss] ,
+                                                   feed_dict={
+                                                               self.images: val_images, 
+                                                               self.labels: val_labels,
+                                                               self.dropout: 1.
+                                                             })
+                     
+                avg_500_loss /= (train_batch_num*5)
+                
+                print("Epoch: [%2d], Average train loss: 5 ep loss: [%.8f], all loss: [%.8f], Test stg loss: [%.8f]\n" \
+                     % ((ep+1), avg_500_loss, avg_loss/itera_counter, val_err))       
+                
+                summary_writer.add_summary(train_sum, ep)
+                summary_writer.add_summary(test_sum, ep)
+                
+                avg_500_loss = 0   
+
+    def train_grr_srcnn_v1(self):
+        """
+        Training process.
+        """     
+        print("Training...")
+
+        stage_size = 3
+
+        # Define dataset path
+        self.train_h5_name = self.train_h5_name + "_[{}]_scale_{}_size_{}.h5".format(self.mode, self.scale, self.image_size)
+        self.test_h5_name = self.test_h5_name + "_[{}]_scale_{}_size_{}.h5".format(self.mode, self.scale, self.image_size)
+        
+        train_data_dir = os.path.join('./{}'.format(self.h5_dir), self.train_h5_name)
+        test_data_dir = os.path.join('./{}'.format(self.h5_dir), self.test_h5_name)
+        
+        # Read data from .h5 file
+        train_data, train_label = read_data(train_data_dir)
+        test_data, test_label = read_data(test_data_dir)
     
         # Stochastic gradient descent with the standard backpropagation       
         ## Stage loss 
         self.stg_train_op = tf.train.AdamOptimizer(self.learning_rate).minimize(self.all_stg_loss)
-        self.stg1_train_op = tf.train.AdamOptimizer(self.learning_rate).minimize(self.stg1_loss)
-        self.stg2_train_op = tf.train.AdamOptimizer(self.learning_rate).minimize(self.stg2_loss)
-        self.stg3_train_op = tf.train.AdamOptimizer(self.learning_rate).minimize(self.stg3_loss)
-        
-        ## Grid loss
-        self.grid1_train_op = tf.train.AdamOptimizer(self.learning_rate).minimize(self.grid1_loss, var_list=grid1)
-        self.grid2_train_op = tf.train.AdamOptimizer(self.learning_rate).minimize(self.grid2_loss, var_list=grid2)
-        self.grid3_train_op = tf.train.AdamOptimizer(self.learning_rate).minimize(self.grid3_loss, var_list=grid3)
-        self.grid4_train_op = tf.train.AdamOptimizer(self.learning_rate).minimize(self.grid4_loss, var_list=grid4)
-
-#        stg1_conv3 = tf.get_default_graph().get_tensor_by_name("stg1_conv3/weights/read:0")
-#        stg2_conv3 = tf.get_default_graph().get_tensor_by_name("stg2_conv3/weights/read:0")
-#        stg3_conv3 = tf.get_default_graph().get_tensor_by_name("stg3_conv3/weights/read:0")
+        #self.stg1_train_op = tf.train.AdamOptimizer(self.learning_rate).minimize(self.stg1_loss)
+        #self.stg2_train_op = tf.train.AdamOptimizer(self.learning_rate).minimize(self.stg2_loss)
+        #self.stg3_train_op = tf.train.AdamOptimizer(self.learning_rate).minimize(self.stg3_loss)
 
         summary_writer = tf.summary.FileWriter('log', self.sess.graph)    
     
@@ -253,7 +389,6 @@ class MODEL(object):
         # Define iteration counter, timer and average loss
         itera_counter = 0
         avg_500_loss = [0]*(stage_size+1)    # 3 stage + 1 total loss
-        avg_gird_loss = [0]*4
         avg_final_loss = 0
         
         # Load checkpoint 
@@ -298,42 +433,19 @@ class MODEL(object):
                 batch_labels[2] = batch_labels[2][:, padding:-padding, padding:-padding, :]          
                 
                 # Run the model
-                train_sum, _, stg1_err, stg2_err, stg3_err, total_stg_err,\
-                grid1_err, grid2_err, grid3_err, grid4_err, total_err = self.sess.run([   self.merged_summary_train,
-                                                                                          self.stg_train_op,
-                                                                                          #self.stg3_train_op, 
-                                                                                          #self.grid1_train_op,
-                                                                                          #self.grid2_train_op,
-                                                                                          #self.grid3_train_op,
-                                                                                          #self.grid4_train_op,
-                                                                                          self.stg1_loss, 
-                                                                                          self.stg2_loss, 
-                                                                                          self.stg3_loss,
-                                                                                          self.all_stg_loss,
-                                                                                          self.grid1_loss,
-                                                                                          self.grid2_loss,
-                                                                                          self.grid3_loss,
-                                                                                          self.grid4_loss,
-                                                                                          self.final_loss], 
-                                                                                          feed_dict={
-                                                                                                      self.images: batch_images, 
-                                                                                                      self.stg1_labels: batch_labels[0],
-                                                                                                      self.stg2_labels: batch_labels[1],
-                                                                                                      self.stg3_labels: batch_labels[2],
-                                                                                                      self.dropout: 1.
-                                                                                                    })   
-
-                avg_500_loss[0] += stg1_err
-                avg_500_loss[1] += stg2_err
-                avg_500_loss[2] += stg3_err
-                avg_500_loss[3] += total_stg_err
-                
-                avg_gird_loss[0] += grid1_err
-                avg_gird_loss[1] += grid2_err
-                avg_gird_loss[2] += grid3_err
-                avg_gird_loss[3] += grid4_err
-                
-                avg_final_loss += ((grid1_err+grid2_err+grid3_err+grid4_err)/4)
+                train_sum, _, stg_err = self.sess.run([   self.merged_summary_train,
+                                                          self.stg_train_op, 
+                                                          self.stg3_loss, 
+                                                       ], 
+                                                       feed_dict={
+                                                                   self.images: batch_images, 
+                                                                   self.stg1_labels: batch_labels[0],
+                                                                   self.stg2_labels: batch_labels[1],
+                                                                   self.stg3_labels: batch_labels[2],
+                                                                   self.dropout: 1.
+                                                                 })   
+   
+                avg_500_loss[0] += stg_err
     
                 batch_pbar.set_description("Batch: [%2d]" % (idx+1))
                 #batch_pbar.refresh()
@@ -343,131 +455,91 @@ class MODEL(object):
                 
                 # Validation
                 ## Run the test images
-                test_sum, val_stg1_err, val_stg2_err, val_stg3_err, val_total_stg_err,\
-                val_grid1_err, val_grid2_err, val_grid3_err, val_grid4_err, val_total_err = self.sess.run([  self.merged_summary_test,
-                                                                                                             self.stg1_loss,
-                                                                                                             self.stg2_loss,
-                                                                                                             self.stg3_loss,
-                                                                                                             self.all_stg_loss,
-                                                                                                             self.grid1_loss,
-                                                                                                             self.grid2_loss,
-                                                                                                             self.grid3_loss,
-                                                                                                             self.grid4_loss,
-                                                                                                             self.final_loss], 
-                                                                                                             feed_dict={
-                                                                                                                         self.images: val_images, 
-                                                                                                                         self.stg1_labels: val_label[0],
-                                                                                                                         self.stg2_labels: val_label[1],
-                                                                                                                         self.stg3_labels: val_label[2],
-                                                                                                                         self.dropout: 1.
-                                                                                                                       })
+                test_sum, val_stg3_err = self.sess.run([  self.merged_summary_test,
+                                                          self.stg3_loss,
+                                                       ], 
+                                                       feed_dict={
+                                                                    self.images: val_images, 
+                                                                    self.stg1_labels: val_label[0],
+                                                                    self.stg2_labels: val_label[1],
+                                                                    self.stg3_labels: val_label[2],
+                                                                    self.dropout: 1.
+                                                                  })
  
                 for i in range(len(avg_500_loss)):
                     avg_500_loss[i] /= (train_batch_num*5)
-                    avg_gird_loss[i] /= (train_batch_num*5)
+
                 avg_final_loss /= (train_batch_num*5)
-                    
-                print("Epoch: [%2d], Average train loss of 5 epoches: stg loss: [%.8f, %.8f, %.8f], total stg loss: [%.8f]" \
-                     % ((ep+1), avg_500_loss[0], avg_500_loss[1], avg_500_loss[2], avg_500_loss[3]))     
-                print("Epoch: [%2d], Average train loss of 5 epoches: grid loss: [%.8f, %.8f, %.8f, %.8f], total loss: [%.8f]" \
-                     % ((ep+1), avg_gird_loss[0], avg_gird_loss[1], avg_gird_loss[2], avg_gird_loss[3], avg_final_loss))     
-                print("Epoch: [%2d], Test stg loss: [%.8f, %.8f, %.8f], total stg loss: [%.8f]" \
-                      % ((ep+1), val_stg1_err, val_stg2_err, val_stg3_err, val_total_stg_err))       
-                print("Epoch: [%2d], Test grid loss: [%.8f, %.8f, %.8f, %.8f], total loss: [%.8f]\n" \
-                      % ((ep+1), val_grid1_err, val_grid2_err, val_grid3_err, val_grid4_err, val_total_err))       
-                
-                #print(stg1_conv3_weight[0][0])
-                #print(stg2_conv3_weight[0][0])
-                #print(stg3_conv3_weight[0][0])
+
+                print("Epoch: [%2d], Average train loss of 5 epoches: stg3 loss: [%.8f], Test stg loss: [%.8f]\n" \
+                     % ((ep+1), avg_500_loss[0], val_stg3_err))                            
                 
                 summary_writer.add_summary(train_sum, ep)
                 summary_writer.add_summary(test_sum, ep)
                 
                 avg_500_loss = [0]*(stage_size+1)
-                avg_gird_loss = [0]*4
-                avg_final_loss = 0     
-
-    def build_edsr_v1(self):###
-        """
-        Build SRCNN model
-        """        
-        # Define input and label images
-        self.input = tf.placeholder(tf.float32, [None, self.image_size, self.image_size, self.color_dim], name='images')
-        self.image_target = tf.placeholder(tf.float32, [None, self.label_size, self.label_size, self.color_dim], name='labels')
-        self.dropout = tf.placeholder(tf.float32, name='dropout')
         
-        # Initial model_zoo
-        mz = model_zoo.model_zoo(self.input, self.dropout, self.is_train, self.model_ticket)
-        
-        # Build model
-        self.logits = mz.build_model(scale=4,feature_size = 256)
-        self.l1_loss = tf.reduce_mean(tf.losses.absolute_difference(self.image_target,self.logits ))
-        self.train_op = tf.train.AdamOptimizer(self.learning_rate).minimize(self.l1_loss)
-
-        mse = tf.reduce_mean(tf.square(self.image_target - self.logits))
-        #mse =  tf.reduce_mean(tf.squared_difference(self.image_target,self.logits))    
-        
-        
-        with tf.name_scope('train_summary'):
-            tf.summary.scalar("loss", self.l1_loss, collections=['train'])
-            tf.summary.scalar("MSE", mse, collections=['train'])
-            tf.summary.image("input_image",self.input, collections=['train'])
-            tf.summary.image("target_image",self.image_target, collections=['train'])
-            tf.summary.image("output_image",self.logits, collections=['train'])
-            
-            self.merged_summary_train = tf.summary.merge_all('train')          
-            
-        with tf.name_scope('test_summary'):
-            tf.summary.scalar("loss", self.l1_loss, collections=['test'])
-            tf.summary.scalar("MSE", mse, collections=['test'])
-            tf.summary.image("input_image",self.input, collections=['test'])
-            tf.summary.image("target_image",self.image_target, collections=['test'])
-            tf.summary.image("output_image",self.logits, collections=['test'])
-
-            self.merged_summary_test = tf.summary.merge_all('test')                 
-        
-        self.saver = tf.train.Saver()        
-        
-    def train_edsr_v1(self):
+                
+    def train_grr_grid_srcnn_v1(self):
         """
         Training process.
         """     
         print("Training...")
 
+        stage_size = 3
+
         # Define dataset path
-        self.train_h5_name = self.train_h5_name + "_[{}]_scale_{}_size_{}.h5".format(self.mode, self.scale, self.label_size)
-        self.test_h5_name = self.test_h5_name + "_[{}]_scale_{}_size_{}.h5".format(self.mode, self.scale, self.label_size)
+        self.train_h5_name = self.train_h5_name + "_[{}]_scale_{}_size_{}.h5".format(self.mode, self.scale, self.image_size)
+        self.test_h5_name = self.test_h5_name + "_[{}]_scale_{}_size_{}.h5".format(self.mode, self.scale, self.image_size)
         
-        train_data_dir = os.path.join(self.h5_dir,self.train_h5_name)
-        test_data_dir = os.path.join(self.h5_dir,self.test_h5_name)
+        train_data_dir = os.path.join('./{}'.format(self.h5_dir), self.train_h5_name)
+        test_data_dir = os.path.join('./{}'.format(self.h5_dir), self.test_h5_name)
         
         # Read data from .h5 file
-        train_data, train_label, freq_label = read_data(train_data_dir)
-        test_data, test_label, freq_label = read_data(test_data_dir)
+        train_data, train_label = read_data(train_data_dir)
+        test_data, test_label = read_data(test_data_dir)
+   
+        # Stochastic gradient descent with the standard backpropagation       
+        ## Stage loss 
+        self.stg_train_op = tf.train.AdamOptimizer(self.learning_rate).minimize(self.all_stg_loss)
+        #self.stg1_train_op = tf.train.AdamOptimizer(self.learning_rate).minimize(self.stg1_loss)
+        #self.stg2_train_op = tf.train.AdamOptimizer(self.learning_rate).minimize(self.stg2_loss)
+        #self.stg3_train_op = tf.train.AdamOptimizer(self.learning_rate).minimize(self.stg3_loss)
+        
+        self.HF_train_op = tf.train.AdamOptimizer(self.learning_rate).minimize(self.HF_loss)
 
-        summary_writer = tf.summary.FileWriter(self.log_dir, self.sess.graph)    
+        summary_writer = tf.summary.FileWriter('log', self.sess.graph)    
     
         self.sess.run(tf.global_variables_initializer())
 
-        if self.load_ckpt(self.checkpoint_dir, ""):
+        # Define iteration counter, timer and average loss
+        itera_counter = 0
+        avg_500_loss = [0]*5    # 5 temp var. for debuging
+        
+        # Load checkpoint 
+        if self.load_ckpt(self.checkpoint_dir, self.ckpt_name):
             print(" [*] Load SUCCESS")
         else:
             print(" [!] Load failed...")
+             
+        batch_labels = [None]*stage_size  
 
-        train_data = self.sess.run(tf.image.resize_images(train_data, [self.image_size, self.image_size]))
-        test_data = self.sess.run(tf.image.resize_images(test_data, [self.image_size, self.image_size]))
-
-        
-
-        # Define iteration counter, timer and average loss
-        itera_counter = 0
         train_batch_num = len(train_data) // self.batch_size
+        
+        padding = (self.image_size - self.label_size) // 2 # 6
+
+        # Prerpare validation data
+        val_label = [None]*stage_size
+        
+        val_images = test_data
+        val_label[0] = test_label
+        val_label[1] = test_label
+        val_label[2] = test_label[:, padding:-padding, padding:-padding, :]
 
         epoch_pbar = tqdm(range(self.epoch))
         for ep in epoch_pbar:            
             # Run by batch images
-            train_data, train_label = batch_shuffle(train_data, train_label, self.batch_size)
-            test_data, test_label = batch_shuffle(test_data, test_label, self.batch_size)
+            shuffled_train_data, shuffled_train_label = batch_shuffle(train_data, train_label, self.batch_size)
 
             epoch_pbar.set_description("Epoch: [%2d]" % ((ep+1)))
             epoch_pbar.refresh()
@@ -477,46 +549,83 @@ class MODEL(object):
                 itera_counter += 1
                   
                 # Get the training data
-                batch_images = train_data[idx*self.batch_size : (idx+1)*self.batch_size]
-                batch_labels = train_label[idx*self.batch_size : (idx+1)*self.batch_size]     
-                batch_test_images =  test_data[:self.batch_size] 
-                batch_test_labels = test_label[:self.batch_size]
+                batch_images = shuffled_train_data[idx*self.batch_size : (idx+1)*self.batch_size]
+                batch_images = np.array(batch_images)
+
+                batch_labels[0] = (shuffled_train_label[idx*self.batch_size : (idx+1)*self.batch_size])
+                batch_labels[1] = (shuffled_train_label[idx*self.batch_size : (idx+1)*self.batch_size])
+                batch_labels[2] = np.array(shuffled_train_label[idx*self.batch_size : (idx+1)*self.batch_size])
+                batch_labels[2] = batch_labels[2][:, padding:-padding, padding:-padding, :]          
                 
                 # Run the model
-                _, train_loss = self.sess.run([self.train_op, self.l1_loss],
-                                                                             feed_dict={self.input: batch_images, 
-                                                                                        self.image_target: batch_labels,
-                                                                                        self.dropout: 1.})
-                                                           
+                train_sum, _, _, stg3_err, bHF_err, HF_err, LF_err, HFLF_idx, TV = self.sess.run([            self.merged_summary_train,
+                                                                                          self.stg_train_op,
+                                                                                          self.HF_train_op,
+                                                                                          self.stg3_loss,
+                                                                                          self.before_HF_loss,
+                                                                                          self.HF_loss,
+                                                                                          self.LF_loss,
+                                                                                          self.HFLF_idx,
+                                                                                          self.TV_stg3_output
+                                                                                          ], 
+                                                                                          feed_dict={
+                                                                                                      self.images: batch_images, 
+                                                                                                      self.stg1_labels: batch_labels[0],
+                                                                                                      self.stg2_labels: batch_labels[1],
+                                                                                                      self.stg3_labels: batch_labels[2],
+                                                                                                      self.dropout: 1.
+                                                                                                    })   
+
+                final_err = (HF_err * (HFLF_idx[0].size) + LF_err * (HFLF_idx[1].size)) / (HFLF_idx[0].size + HFLF_idx[1].size)   
+                
+                avg_500_loss[0] += stg3_err
+                avg_500_loss[1] += bHF_err    
+                avg_500_loss[2] += HF_err    
+                avg_500_loss[3] += LF_err    
+                avg_500_loss[4] += final_err    
     
-                batch_pbar.set_description("Batch: [%2d], L1:%.2f" % (idx+1, train_loss))
+                batch_pbar.set_description("Batch: [%2d]" % (idx+1))
                 #batch_pbar.refresh()
             
-            if ep % 1 == 0:
+                #print("HF num: ", (HFLF_idx[0].size), "LF num", (HFLF_idx[1].size))
+            
+            if ep % 5 == 0:
                 self.save_ckpt(self.checkpoint_dir, self.ckpt_name, itera_counter)
                 
-                _,  train_sum, train_loss = self.sess.run([self.train_op, self.merged_summary_train, self.l1_loss], 
-                                                                                                    feed_dict={
-                                                                                                        self.input: batch_images, 
-                                                                                                        self.image_target: batch_labels,
-                                                                                                        self.dropout: 1.
+                # Validation
+                ## Run the test images
+                test_sum, val_stg3_err, val_bHF_err, val_HF_err, val_LF_err, val_HFLF_idx = self.sess.run([  self.merged_summary_test,
+                                                                                                             self.stg3_loss,
+                                                                                                             self.before_HF_loss,
+                                                                                                             self.HF_loss,
+                                                                                                             self.LF_loss,                                                                                                             
+                                                                                                             self.HFLF_idx,
+                                                                                                             ], 
+                                                                                                             feed_dict={
+                                                                                                                         self.images: val_images, 
+                                                                                                                         self.stg1_labels: val_label[0],
+                                                                                                                         self.stg2_labels: val_label[1],
+                                                                                                                         self.stg3_labels: val_label[2],
+                                                                                                                         self.dropout: 1.
                                                                                                                        })
-                test_sum, test_loss = self.sess.run([self.merged_summary_test, self.l1_loss], 
-                                                                                                feed_dict={
-                                                                                                    self.input: batch_test_images, 
-                                                                                                    self.image_target: batch_test_labels,
-                                                                                                    self.dropout: 1.})
+ 
+                val_final_loss = (val_HF_err * (val_HFLF_idx[0].size) + val_LF_err * (val_HFLF_idx[1].size)) / (val_HFLF_idx[0].size + val_HFLF_idx[1].size)
+                #val_final_loss = (val_HF_err*test_HF_size + val_LF_err*test_LF_size) / test_data_size
                                                                                                                        
+                #print("Val. HF num: ", (val_HFLF_idx[0].size), "Val. LF num", (val_HFLF_idx[1].size))
 
+                for i in range(len(avg_500_loss)):
+                    avg_500_loss[i] /= (train_batch_num*5)
                
-                    
-                print("Epoch: [{}], Train_loss: {}".format((ep+1), train_loss))     
-                print("Epoch: [{}], Test_loss: {}".format((ep+1), test_loss))  
-                
+                print("Epoch: [%2d], Average train loss of 5 epoches: stg3 loss: [%.8f], HF loss: [%.8f]->[%.8f], LF loss: [%.8f], Final loss: [%.8f]" \
+                     % ((ep+1), avg_500_loss[0], avg_500_loss[1], avg_500_loss[2], avg_500_loss[3], avg_500_loss[4]))             
+                print("Epoch: [%2d], Test stg loss: [%.8f], HF loss: [%.8f]->[%.8f], LF loss: [%.8f], Final loss: [%.8f]\n"\
+                     % ((ep+1), val_stg3_err, val_bHF_err, val_HF_err, val_LF_err, val_final_loss))
                 
                 summary_writer.add_summary(train_sum, ep)
                 summary_writer.add_summary(test_sum, ep)
                 
+                avg_500_loss = [0]*5
                 
     def save_ckpt(self, checkpoint_dir, ckpt_name, step):
         """
