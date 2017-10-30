@@ -49,30 +49,25 @@ class PRPRC(object):
         """
         
         print("Preparing training dataset...")
-        sub_HF_count, sub_LF_count = self.input_image_setup(self.train_dir, self.train_extract_stride, self.train_h5_name)
-        print("Sub-images number = [{}], HF sub-images number = [{}], LF sub-images number = [{}], Done.".format(sub_HF_count+sub_LF_count, sub_HF_count, sub_LF_count))
+        sub_count = self.input_image_setup(self.train_dir, self.train_extract_stride, self.train_h5_name)
+        #print("Sub-images number = [{}], HF sub-images number = [{}], LF sub-images number = [{}], Done.".format(sub_HF_count+sub_LF_count, sub_HF_count, sub_LF_count))
+        print("Sub-images number = [{}], Done.".format(sub_count))
         
         print("Preparing testing dataset...")
-        sub_HF_count, sub_LF_count = self.input_image_setup(self.test_dir, self.test_extract_stride, self.test_h5_name)
-        print("Sub-images number = [{}], HF sub-images number = [{}], LF sub-images number = [{}], Done.".format(sub_HF_count+sub_LF_count, sub_HF_count, sub_LF_count))
+        sub_count = self.input_image_setup(self.test_dir, self.test_extract_stride, self.test_h5_name)
+        #print("Sub-images number = [{}], HF sub-images number = [{}], LF sub-images number = [{}], Done.".format(sub_HF_count+sub_LF_count, sub_HF_count, sub_LF_count))
+        print("Sub-images number = [{}], Done.".format(sub_count))
         
     def input_image_setup(self, data_dir, extract_stride, h5_name):
         """
         Setup the input images
         """
         input_data_path, label_data_path = self.get_file_path(data_dir)
-        
-#        if self.color_dim is 1:
-#            is_grayscale = True
-#        else:
-#            is_grayscale = False
 
         sub_input_sequence = []
         sub_label_sequence = []
-        sub_freq_label_sequence = []
         
-        sub_HF_count = 0
-        sub_LF_count = 0
+        sub_count = 0
         
         for i in range(len(input_data_path)):
             input_data = self.imread(input_data_path[i])
@@ -90,35 +85,30 @@ class PRPRC(object):
                     sub_label = label_data[x:x+self.image_size, y:y+self.image_size]
 
                     # Preprocess
-                    sub_input_preprocessd, sub_label_preprocessd, sub_freq_label = self.preprocess(sub_input, sub_label, h5_name)                    
+                    sub_input_preprocessd, sub_label_preprocessd = self.preprocess(sub_input, sub_label, h5_name)                    
 
                     for j in range(len(sub_input_preprocessd)):
                         tmp_input = sub_input_preprocessd[j]
                         tmp_label = sub_label_preprocessd[j]
-                        tmp_freq_label = sub_freq_label[j]
                         
                         # Make channel value
                         tmp_input = tmp_input.reshape([self.image_size, self.image_size, 1])  
                         tmp_label = tmp_label.reshape([self.image_size, self.image_size, 1])  
                         
-                        # Save the sub-images & freq. labels
+                        # Save the sub-images
                         sub_input_sequence.append(tmp_input)
-                        sub_label_sequence.append(tmp_label)  
-                        sub_freq_label_sequence.append(tmp_freq_label)
+                        sub_label_sequence.append(tmp_label)                         
+                        sub_count += 1
                         
-                    sub_HF_count += sub_freq_label.count("HF")
-                    sub_LF_count += sub_freq_label.count("LF")
-        
         arr_data = np.asarray(sub_input_sequence) 
         arr_label = np.asarray(sub_label_sequence) 
-        arr_freq_label = np.asarray(sub_freq_label_sequence) 
         
         h5_name = h5_name + "_[{}]_scale_{}_size_{}.h5".format(self.mode, self.scale, self.image_size)
         save_dir = os.path.join(os.getcwd(), self.output_dir, h5_name)
-        self.make_h5data(arr_data, arr_label, arr_freq_label, save_dir)
+        self.make_h5data(arr_data, arr_label, save_dir)
 
-        return sub_HF_count, sub_LF_count
-        
+        return sub_count
+    
     def get_file_path(self, data_dir):
         """
         Get the dataset file path.
@@ -134,9 +124,7 @@ class PRPRC(object):
         preprocessed_folder = "preprocessed_scale_{}".format(self.scale)
         
         # Define the preprocessed ext.              
-        #input_data_ext = "*_bicubic_scale_{}_input.bmp".format(self.scale)
         input_data_ext = "*_bicubic_scale_{}_input.bmp".format(self.scale)
-        #input_data_ext = "*_label.bmp".format(self.scale)
         label_data_ext = "*_label.bmp".format(self.scale)
     
         data_dir = os.path.join(os.getcwd(), data_dir, preprocessed_folder)
@@ -159,7 +147,6 @@ class PRPRC(object):
     def preprocess(self, input_data, label_data, h5_name):      
         preprocessed_input_data = []
         preprocessed_label_data = []
-        freq_label = []
         
         # Normalization
         input_data = input_data / 255.
@@ -167,31 +154,10 @@ class PRPRC(object):
         
         preprocessed_input_data.append(input_data)
         preprocessed_label_data.append(label_data)
-        
-        tmp_var = np.var(input_data)
-        if tmp_var >= 0.0325/2:
-            freq_label.append("HF")
-            
-            if self.mode == "freq" and h5_name == self.train_h5_name:                      
-                # Flip
-                flipr_input_data = np.fliplr(input_data)
-                flipr_label_data = np.fliplr(label_data)
-                preprocessed_input_data.append(flipr_input_data)
-                preprocessed_label_data.append(flipr_label_data)
-                freq_label.append("HF")
-                
-                # Rotation
-                rot90_input_data = np.rot90(input_data)
-                rot90_label_data = np.rot90(label_data)
-                preprocessed_input_data.append(rot90_input_data)        
-                preprocessed_label_data.append(rot90_label_data)        
-                freq_label.append("HF")            
-        else:
-            freq_label.append("LF")                       
                
-        return preprocessed_input_data, preprocessed_label_data, freq_label
+        return preprocessed_input_data, preprocessed_label_data
         
-    def make_h5data(self, input, label, freq_label, save_dir):
+    def make_h5data(self, input, label, save_dir):
         """
         Make input data as h5 file format
         """
@@ -201,5 +167,4 @@ class PRPRC(object):
         with h5py.File(savepath, 'w') as hf:
             hf.create_dataset('input', data=input)
             hf.create_dataset('label', data=label)
-            #hf.create_dataset('freq', data=freq_label)
            

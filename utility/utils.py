@@ -31,10 +31,8 @@ def read_data(path):
     with h5py.File(path, 'r') as hf:
         data = np.array(hf.get('input'))
         label = np.array(hf.get('label'))
-        #freq = np.array(hf.get('freq'))
-        freq = []
 
-    return data, label, freq
+    return data, label
 
 def batch_shuffle(data, label, batch_size):
     """

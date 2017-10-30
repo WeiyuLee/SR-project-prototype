@@ -1,8 +1,8 @@
 close all; clear all;
 
 %% Choose the target dataset
-%preprocess_target = 'train';
-preprocess_target = 'test';
+preprocess_target = 'train';
+%preprocess_target = 'test';
 
 %% Set the data path
 Train_data_dir = './Train/';

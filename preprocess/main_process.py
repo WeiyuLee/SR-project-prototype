@@ -13,17 +13,22 @@ import os
 
 flags = tf.app.flags
 
-flags.DEFINE_string("mode", "small", "operation mode: normal or freq [normal]")
+flags.DEFINE_string("mode", "normal", "operation mode: normal or freq [normal]")
 
 flags.DEFINE_integer("scale", 4, "The size of scale factor for preprocessing input image [3]")
+<<<<<<< HEAD
 flags.DEFINE_integer("image_size", 68, "The size of image to use [33]")
 flags.DEFINE_integer("label_size", 68, "The size of label to produce [21]")
+=======
+flags.DEFINE_integer("image_size", 32, "The size of image to use [33]")
+flags.DEFINE_integer("label_size", 20, "The size of label to produce [21]")
+>>>>>>> 4a694c2a9fad08c58512eff696bbb4978dc1a8e3
 flags.DEFINE_integer("color_dim", 1, "Dimension of image color. [1]")
 
 flags.DEFINE_integer("train_extract_stride", 14, "The size of stride to apply input image [14]")
 flags.DEFINE_integer("test_extract_stride", flags.FLAGS.label_size, "The size of stride to apply input image [14]")
 
-flags.DEFINE_string("train_dir", "Train", "Name of train dataset directory")
+flags.DEFINE_string("train_dir", "Train/91", "Name of train dataset directory")
 flags.DEFINE_string("test_dir", "Test/Set5", "Name of test dataset directory [Test/Set5]")
 flags.DEFINE_string("output_dir", "output", "Name of sample directory [output]")
 

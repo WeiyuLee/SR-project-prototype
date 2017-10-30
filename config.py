@@ -35,7 +35,7 @@ class config:
 		train_config = self.config["train"]
 
 		train_config["mode"] = "normal" # Operation mode: normal or freq [normal]
-		train_config["epoch"] = 10  # Number of epoch [10]
+		train_config["epoch"] = 10000  # Number of epoch [10000]
 		train_config["batch_size"] = 128 # The size of batch images [128]
 		train_config["image_size"] = 32 # The size of image to use [33]
 		train_config["label_size"] = 20 # The size of label to produce [21]
