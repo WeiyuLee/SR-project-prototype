@@ -12,6 +12,7 @@ Scipy version > 0.18 is needed, due to 'mode' option from scipy.misc.imread func
 import h5py
 import numpy as np
 import random
+import scipy.misc as misc
 
 import tensorflow as tf
 
@@ -52,6 +53,36 @@ def batch_shuffle(data, label, batch_size):
     data_shuffled, label_shuffled = zip(*shuffled_data)
     
     return data_shuffled, label_shuffled
+
+def batch_shuffle_rndc(data, label, scale, subimage_size, index, batch_size):
+
+        crop_data = []
+        crop_label = []
+        for i in range(index, index+batch_size):
+            
+            lridx = random_crop(scale, data[i].shape, subimage_size)
+            crop_lr = data[i][lridx[0]:lridx[0]+subimage_size,
+                              lridx[1]:lridx[1]+subimage_size,
+                              :]
+            crop_hr = label[i][lridx[0]*scale:lridx[0]*scale+scale*subimage_size,
+                              lridx[1]*scale:lridx[1]*scale+scale*subimage_size,
+                              :]
+            crop_data.append(crop_lr)
+            crop_label.append(crop_hr)    
+
+        return crop_data, crop_label
+
+
+
+
+def random_crop(scale, LR_image_size, subimage_size):
+
+    x_list = list(range(0,LR_image_size[0]-subimage_size-1))
+    y_list = list(range(0,LR_image_size[1]-subimage_size-1))
+    random.shuffle(x_list)
+    random.shuffle(y_list)
+
+    return (x_list[0], y_list[0])
 
 def log10(x):
   numerator = tf.log(x)

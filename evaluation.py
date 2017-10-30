@@ -60,9 +60,10 @@ def split_img(imgname,img, padding_size, subimg_size):
             grid_r = padding_size[0] + r*strides[0] 
             grid_c = padding_size[1] + c*strides[1] 
 
-            sub_img = img[    grid_r - padding_size[0] : grid_r + strides[0] + padding_size[0],
+            sub_img = img[  grid_r - padding_size[0] : grid_r + strides[0] + padding_size[0],
                             grid_c - padding_size[1] : grid_c + strides[1] + padding_size[1],
                             :]
+            
 
             # insert sub image to dictionary with key = [imagename]_[row_index]_[col_index]
             sub_imgs[imgname + "_"+ str(grid_r) + "_" + str(grid_c)] = sub_img
@@ -75,14 +76,17 @@ def merge_img(img_size, sub_images, padding_size,subimg_size, scale=2, down_scal
 
     # Create an empty array for merging image
 
-    padded_size = [    img_size[0],
+    padded_size = [ img_size[0],
                     img_size[1],
                     img_size[2]]
+
 
     merged_image = np.zeros([    (padded_size[0]//subimg_size[0])*subimg_size[0],
                                 (padded_size[1]//subimg_size[1])*subimg_size[1],
                                  padded_size[2]])
     for k in sub_images:
+
+
 
         key = k.split("_")
 
@@ -99,6 +103,7 @@ def merge_img(img_size, sub_images, padding_size,subimg_size, scale=2, down_scal
                         :] = sub_images[k][padding_size_rescale[0]:padding_size_rescale[0]+subimg_size[0],
                                             padding_size_rescale[1]:padding_size_rescale[1]+subimg_size[1],
                                             :]
+
     return merged_image
 
 class becnchmark:
@@ -251,12 +256,15 @@ class evaluation:
 
         return self.dataset_pair
 
-    def input_setup(self, input_path, target_path, padding_size = [3,3], subimg_size = [30,30], scale = 2):
+    def input_setup(self, input_path, target_path, , sub_mean = False, padding_size = [3,3], subimg_size = [30,30], scale = 2):
 
     
         inputs = imread(input_path)
         targets = imread(target_path)
 
+        if sub_mean:
+            inputs  = inputs - np.mean(inputs)
+            targets  = targets - np.mean(targets)
 
         _, sout = split_img("input",inputs, padding_size, subimg_size)
 
@@ -270,6 +278,7 @@ class evaluation:
         padding_size = [padding_size[0]*scale, padding_size[1]*scale]
         subimg_size = [subimg_size[0]*scale, subimg_size[1]*scale]
         padded_size, target_split = split_img("target",targets, padding_size, subimg_size)
+
         target_merge = merge_img(padded_size, target_split, padding_size, subimg_size, 1)
 
         input_pair = {
@@ -278,35 +287,37 @@ class evaluation:
                         'target': target_merge
                     }
 
-        return input_pair
+        return input_pair, np.mean(inputs), np.mean(targets)
 
-    def load_model(self, model_ticket, ckpt_file):
+    def load_model(self, model_ticket, ckpt_file, scale, config = {}):
 
 
 
         tf.reset_default_graph() 
 
         self.inputs = tf.placeholder(tf.float32, [  None,
-                                                    self.subimg_size[0]+self.padding_size[0]*2, 
-                                                    self.subimg_size[1]+self.padding_size[1]*2,
+                                                    int((self.subimg_size[0]+self.padding_size[0]*2)/scale), 
+                                                    int((self.subimg_size[1]+self.padding_size[1]*2)/scale),
                                                     self.channel])
 
 
         mz = model_zoo.model_zoo(self.inputs, None, False, model_ticket)    
-        model_prediction = mz.build_model(scale=4,feature_size = 256)
+        model_prediction = mz.build_model(config)
         sess = tf.Session()
         saver = tf.train.Saver()
         saver.restore(sess, ckpt_file)
 
         return sess, model_prediction
 
-    def prediction(self, image, sess,model_prediction):
+    def prediction(self, image, sess,model_prediction, scale):
 
         """
         run model in model_ticket_list and return prediction
         """
-            
-        predicted = sess.run(model_prediction, feed_dict = {self.inputs:image})
+       
+        resize_image = sess.run(tf.image.resize_images(image[0] , [int((self.subimg_size[0]+self.padding_size[0]*2)/scale), int((self.subimg_size[1]+self.padding_size[1]*2)/scale)]))   
+ 
+        predicted = sess.run(model_prediction, feed_dict = {self.inputs:[resize_image]})
             
 
         return predicted
@@ -354,7 +365,7 @@ class evaluation:
                         scale =  int(scale_key)
                         HR_img = dataset_scale[input_key]['HR']
                         LR_img = dataset_scale[input_key]['small']
-                        input_pair = self.input_setup(LR_img, HR_img, padding_size = padding_size, subimg_size = subimg_size, scale = scale)
+                        input_pair,_,_ = self.input_setup(LR_img, HR_img, padding_size = padding_size, subimg_size = subimg_size, scale = scale)
 
 
                         test_input = input_pair['inputs']
@@ -393,10 +404,12 @@ class evaluation:
                                     scale = 1  
                                 else:
                                     HR_img = dataset_scale[input_key]['HR']
-                                    LR_img = dataset_scale[input_key]['small']
+                                    LR_img = dataset_scale[input_key]['HR']
                                     scale =  int(scale_key)
+                                    scale = 1  
 
-                            input_pair = self.input_setup(LR_img, HR_img, padding_size = padding_size, subimg_size = subimg_size, scale = scale)
+
+                            input_pair, in_mean, tar_mean = self.input_setup(LR_img, HR_img,model_dict[mkey]["sub_mean"] ,padding_size = padding_size, subimg_size = subimg_size, scale = scale)
                             test_input = input_pair['inputs']
                             key =  input_pair['input_key']
 
@@ -407,7 +420,7 @@ class evaluation:
                             up_subimg_size = [subimg_size[0]*scale, subimg_size[1]*scale]
 
 
-                            sess, model_prediction = self.load_model(mkey,model_dict[mkey]["ckpt_file"])
+                            sess, model_prediction = self.load_model(mkey,model_dict[mkey]["ckpt_file"],int(scale_key), model_dict[mkey]["model_config"])
 
                             for l in range(len(test_input)):
                                 if model_dict[mkey]["isGray"] == True: 
@@ -421,10 +434,14 @@ class evaluation:
                                     testimg = testimg/255.
                                     if l==0: targetimg = targetimg/255.
                                 
-                                m_out = self.prediction([testimg], sess, model_prediction)                    
+                                m_out = self.prediction([testimg], sess, model_prediction, int(scale_key))                    
                                 output_stack[key[l]] = np.squeeze(m_out,axis=0)
-                                
-                            model_out = merge_img(targetimg.shape, output_stack, up_padding_size,up_subimg_size, scale, down_scale_by_model=True)                            
+                            
+                            model_out = merge_img(targetimg.shape, output_stack, up_padding_size,up_subimg_size, scale, down_scale_by_model=False)    
+
+
+                            cv2.imwrite("test.png", model_out + in_mean)    
+                            cv2.imwrite("target.png", targetimg + tar_mean)                        
                             
                             if model_dict[mkey]["isNormallized"] == True: 
                                 model_out = model_out*255
@@ -505,8 +522,8 @@ def main_process():
         results = eval.run_evaluation(benchmark_type = ['model'], model_dict = conf["evaluation"]["models"][midx])
         eval_result.append(results)
     
-    results = eval.run_evaluation(benchmark_type = ['bicubic'])
-    eval_result.append(results)
+    #results = eval.run_evaluation(benchmark_type = ['bicubic'])
+    #eval_result.append(results)
     summary_result(conf["evaluation"]["summary_file"], eval_result)
 
     return eval_result

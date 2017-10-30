@@ -19,7 +19,7 @@ flags.DEFINE_string("mode", "normal", "operation mode: normal or freq [normal]")
 flags.DEFINE_integer("epoch", 10, "Number of epoch [10]")
 
 flags.DEFINE_integer("batch_size", 128, "The size of batch images [128]")
-flags.DEFINE_integer("image_size", 32, "The size of image to use [33]")
+flags.DEFINE_integer("image_size", 80, "The size of image to use [33]")
 flags.DEFINE_integer("label_size", 20, "The size of label to produce [21]")
 
 flags.DEFINE_float("learning_rate", 1e-4, "The learning rate of gradient descent algorithm [1e-4]")

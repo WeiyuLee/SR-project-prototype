@@ -14,9 +14,12 @@ from tqdm import tqdm
 import numpy as np
 
 import model_zoo
+import scipy.misc as misc
+import random
 
 from utils import (
   read_data, 
+  batch_shuffle_rndc,
   batch_shuffle,
   log10
 )
@@ -94,7 +97,7 @@ class MODEL(object):
         
         self.model_ticket = model_ticket
         
-        self.model_list = ["googleLeNet_v1", "resNet_v1", "srcnn_v1", "grr_srcnn_v1", "grr_grid_srcnn_v1", "edsr_v1"]
+        self.model_list = ["googleLeNet_v1", "resNet_v1", "srcnn_v1", "grr_srcnn_v1", "grr_grid_srcnn_v1", "espcn_v1", "edsr_v1"]
         
         self.build_model()        
     
@@ -387,32 +390,37 @@ class MODEL(object):
                 avg_gird_loss = [0]*4
                 avg_final_loss = 0     
 
-    def build_edsr_v1(self):###
+    def build_espcn_v1(self):###
         """
         Build SRCNN model
         """        
         # Define input and label images
         self.input = tf.placeholder(tf.float32, [None, self.image_size, self.image_size, self.color_dim], name='images')
         self.image_target = tf.placeholder(tf.float32, [None, self.label_size, self.label_size, self.color_dim], name='labels')
+        #mean_x = tf.reduce_mean(self.input)
+        #image_input =  self.input - mean_x
+        #mean_y = tf.reduce_mean(self.image_target)
+        #taget  =  self.image_target - mean_y
+        image_input = self.input
+        target = self.image_target
         self.dropout = tf.placeholder(tf.float32, name='dropout')
         
         # Initial model_zoo
-        mz = model_zoo.model_zoo(self.input, self.dropout, self.is_train, self.model_ticket)
+        mz = model_zoo.model_zoo(image_input, self.dropout, self.is_train, self.model_ticket)
         
         # Build model
-        self.logits = mz.build_model(scale=4,feature_size = 256)
-        self.l1_loss = tf.reduce_mean(tf.losses.absolute_difference(self.image_target,self.logits ))
-        self.train_op = tf.train.AdamOptimizer(self.learning_rate).minimize(self.l1_loss)
-
-        mse = tf.reduce_mean(tf.square(self.image_target - self.logits))
-        #mse =  tf.reduce_mean(tf.squared_difference(self.image_target,self.logits))    
+        #self.logits = mz.build_model(scale=4,feature_size = 32)
+        self.logits = mz.build_model()
+        self.l1_loss = tf.reduce_mean(tf.losses.absolute_difference(target,self.logits ))
+        mse = tf.reduce_mean(tf.square(target - self.logits))
+        self.train_op = tf.train.AdamOptimizer(self.learning_rate).minimize(mse)
         
         
         with tf.name_scope('train_summary'):
             tf.summary.scalar("loss", self.l1_loss, collections=['train'])
             tf.summary.scalar("MSE", mse, collections=['train'])
-            tf.summary.image("input_image",self.input, collections=['train'])
-            tf.summary.image("target_image",self.image_target, collections=['train'])
+            tf.summary.image("input_image",self.input , collections=['train'])
+            tf.summary.image("target_image",target, collections=['train'])
             tf.summary.image("output_image",self.logits, collections=['train'])
             
             self.merged_summary_train = tf.summary.merge_all('train')          
@@ -421,14 +429,14 @@ class MODEL(object):
             tf.summary.scalar("loss", self.l1_loss, collections=['test'])
             tf.summary.scalar("MSE", mse, collections=['test'])
             tf.summary.image("input_image",self.input, collections=['test'])
-            tf.summary.image("target_image",self.image_target, collections=['test'])
+            tf.summary.image("target_image",target , collections=['test'])
             tf.summary.image("output_image",self.logits, collections=['test'])
 
             self.merged_summary_test = tf.summary.merge_all('test')                 
         
         self.saver = tf.train.Saver()        
         
-    def train_edsr_v1(self):
+    def train_espcn_v1(self):
         """
         Training process.
         """     
@@ -445,19 +453,20 @@ class MODEL(object):
         train_data, train_label, freq_label = read_data(train_data_dir)
         test_data, test_label, freq_label = read_data(test_data_dir)
 
-        summary_writer = tf.summary.FileWriter(self.log_dir, self.sess.graph)    
+        log_dir = os.path.join(self.log_dir, self.ckpt_name, "log")
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+        summary_writer = tf.summary.FileWriter(log_dir, self.sess.graph)    
     
         self.sess.run(tf.global_variables_initializer())
 
-        if self.load_ckpt(self.checkpoint_dir, ""):
+        if self.load_ckpt(self.checkpoint_dir, self.ckpt_name):
             print(" [*] Load SUCCESS")
         else:
             print(" [!] Load failed...")
 
         train_data = self.sess.run(tf.image.resize_images(train_data, [self.image_size, self.image_size]))
         test_data = self.sess.run(tf.image.resize_images(test_data, [self.image_size, self.image_size]))
-
-        
 
         # Define iteration counter, timer and average loss
         itera_counter = 0
@@ -492,7 +501,7 @@ class MODEL(object):
                 batch_pbar.set_description("Batch: [%2d], L1:%.2f" % (idx+1, train_loss))
                 #batch_pbar.refresh()
             
-            if ep % 1 == 0:
+            if ep % 100 == 0:
                 self.save_ckpt(self.checkpoint_dir, self.ckpt_name, itera_counter)
                 
                 _,  train_sum, train_loss = self.sess.run([self.train_op, self.merged_summary_train, self.l1_loss], 
@@ -517,6 +526,157 @@ class MODEL(object):
                 summary_writer.add_summary(train_sum, ep)
                 summary_writer.add_summary(test_sum, ep)
                 
+
+    def build_edsr_v1(self):###
+        """
+        Build SRCNN model
+        """        
+        # Define input and label images
+        self.input = tf.placeholder(tf.float32, [None, self.image_size, self.image_size, self.color_dim], name='images')
+        self.image_target = tf.placeholder(tf.float32, [None, self.label_size, self.label_size, self.color_dim], name='labels')
+        self.dropout = tf.placeholder(tf.float32, name='dropout')
+        
+        """
+        mean_x = tf.reduce_mean(self.input)
+        image_input  =self.input - mean_x
+        mean_y = tf.reduce_mean(self.image_target)
+        target = self.image_target - mean_y
+        """
+        #image_input = self.input
+        #target = self.image_target
+        
+        # Initial model_zoo
+        mz = model_zoo.model_zoo(image_input, self.dropout, self.is_train, self.model_ticket)
+        
+        # Build model
+        self.logits = mz.build_model(scale=self.scale,feature_size = 256)
+        self.l1_loss = tf.reduce_mean(tf.losses.absolute_difference(target,self.logits))
+        mse = tf.reduce_mean(tf.square(target - self.logits))
+        self.train_op = tf.train.AdamOptimizer(self.learning_rate).minimize(self.l1_loss)
+        
+        
+        with tf.name_scope('train_summary'):
+            tf.summary.scalar("loss", self.l1_loss, collections=['train'])
+            tf.summary.scalar("MSE", mse, collections=['train'])
+            tf.summary.image("input_image",self.input , collections=['train'])
+            tf.summary.image("target_image",target, collections=['train'])
+            tf.summary.image("output_image",self.logits, collections=['train'])
+            
+            self.merged_summary_train = tf.summary.merge_all('train')          
+            
+        with tf.name_scope('test_summary'):
+            tf.summary.scalar("loss", self.l1_loss, collections=['test'])
+            tf.summary.scalar("MSE", mse, collections=['test'])
+            tf.summary.image("input_image",self.input, collections=['test'])
+            tf.summary.image("target_image",target , collections=['test'])
+            tf.summary.image("output_image",self.logits, collections=['test'])
+
+            self.merged_summary_test = tf.summary.merge_all('test')                 
+        
+        self.saver = tf.train.Saver()
+
+        
+    def train_edsr_v1(self):
+        """
+        Training process.
+        """     
+        print("Training...")
+
+        # Define dataset path
+
+        #mean of DIV2K
+        train_mean = np.zeros((1,1,3))
+        train_mean[0][0][0] = 113.9427
+        train_mean[0][0][1] = 111.3509
+        train_mean[0][0][2] = 103.1092
+
+        #mean of set5
+        test_mean = np.zeros((1,1,3))
+        test_mean[0][0][0] = 140.6670
+        test_mean[0][0][1] = 112.9228
+        test_mean[0][0][2] = 85.2956
+
+
+        test_dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/Set5/image_SRF_4", test_mean,type="test")
+        dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/DIV2K/", train_mean)
+
+        
+
+        log_dir = os.path.join(self.log_dir, self.ckpt_name, "log")
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+        summary_writer = tf.summary.FileWriter(log_dir, self.sess.graph)    
+    
+        self.sess.run(tf.global_variables_initializer())
+
+        if self.load_ckpt(self.checkpoint_dir, self.ckpt_name):
+            print(" [*] Load SUCCESS")
+        else:
+            print(" [!] Load failed...")
+
+        
+       
+        # Define iteration counter, timer and average loss
+        itera_counter = 0
+        #train_batch_num = len(train_data) // self.batch_size
+
+        epoch_pbar = tqdm(range(self.epoch))
+        for ep in epoch_pbar:            
+            # Run by batch images
+            random.shuffle(dataset) 
+            train_data, train_label  = zip(*dataset)
+            test_data, test_label  = zip(*test_dataset)
+
+            epoch_pbar.set_description("Epoch: [%2d]" % ((ep+1)))
+            epoch_pbar.refresh()
+        
+            batch_pbar = tqdm(range(0, len(train_data)//self.batch_size), desc="Batch: [0]")
+            
+
+            for idx in batch_pbar:                
+                        
+                itera_counter += 1
+                batch_index = idx*self.batch_size 
+                batch_images, batch_labels = batch_shuffle_rndc(train_data, train_label, self.scale, self.image_size,batch_index, self.batch_size)
+                  
+                
+                # Run the model
+                _, train_loss = self.sess.run([self.train_op, self.l1_loss],
+                                                                             feed_dict={self.input: batch_images, 
+                                                                                        self.image_target: batch_labels,
+                                                                                        self.dropout: 1.})
+                                                           
+    
+                batch_pbar.set_description("Batch: [%2d], L1:%.2f" % (idx+1, train_loss))
+                #batch_pbar.refresh()
+              
+            if ep % 5 == 0:
+                self.save_ckpt(self.checkpoint_dir, self.ckpt_name, itera_counter)
+                
+                _,  train_sum, train_loss = self.sess.run([self.train_op, self.merged_summary_train, self.l1_loss], 
+                                                                                                    feed_dict={
+                                                                                                        self.input: batch_images, 
+                                                                                                        self.image_target: batch_labels,
+                                                                                                        self.dropout: 1.
+                                                                                                                       })
+                batch_test_images, batch_test_labels = batch_shuffle_rndc(test_data, test_label, self.scale, self.image_size, 0, 5)
+                test_sum, test_loss = self.sess.run([self.merged_summary_test, self.l1_loss], 
+                                                                                                feed_dict={
+                                                                                                    self.input: batch_test_images, 
+                                                                                                    self.image_target: batch_test_labels,
+                                                                                                    self.dropout: 1.})
+                                                                                                                       
+
+               
+                    
+                print("Epoch: [{}], Train_loss: {}".format((ep+1), train_loss))     
+                print("Epoch: [{}], Test_loss: {}".format((ep+1), test_loss))  
+                
+                
+                summary_writer.add_summary(train_sum, ep)
+                summary_writer.add_summary(test_sum, ep)
+        
+              
                 
     def save_ckpt(self, checkpoint_dir, ckpt_name, step):
         """
@@ -564,4 +724,46 @@ class MODEL(object):
             return True
         
         else:
-            return False                
+            return False          
+
+
+    def load_divk(self, dataset_path, mean, lrtype='bicubic', type='train'):
+
+        #dataset_path = "/home/ubuntu/dataset/SuperResolution/DIV2K/"
+
+        if type == "train":
+            sub_path = "DIV2K_train"
+
+
+            if lrtype == 'bicubic':
+                lr_subpath = sub_path + "_LR_bicubic/" + "X" + str(self.scale)
+            else:
+                lr_subpath = sub_path + "_LR_unkown/" + "X" + str(self.scale)
+            LR_path = os.path.join(dataset_path, lr_subpath)
+            HR_path = os.path.join(dataset_path, sub_path + "_HR")
+
+            hr_imgs = os.listdir(HR_path)
+            lr_imgs = [os.path.join(LR_path,hr_imgs[i].split(".")[0] + 'x' + str(self.scale)+'.' + hr_imgs[i].split(".")[1]) for i in range(len(hr_imgs))]
+            hr_imgs = [os.path.join(HR_path, hr_imgs[i]) for i in range(len(hr_imgs))]
+        
+
+        if type == "test":
+            lr_imgs = []
+            hr_imgs = []
+            images = os.listdir(dataset_path)
+            for i in range(len(images)//2):
+                lr_imgs.append(os.path.join(dataset_path, "img_00"+str(i+1)+"_SRF_" + str(self.scale)+"_LR.png"))
+                hr_imgs.append(os.path.join(dataset_path, "img_00"+str(i+1)+"_SRF_"+ str(self.scale)+"_HR.png"))
+
+        hr_list = []
+        lr_list = []
+
+        for i in range(len(lr_imgs)):
+            print("read:", i)
+            
+             
+            hr_list.append(7))
+            lr_list.append(misc.imread(lr_imgs[i]))
+            
+            
+        return list(zip(lr_list, hr_list))

@@ -177,6 +177,33 @@ def upsample(x,scale=2,features=64,isColor=False,activation=tf.nn.relu):
             x = PS(x,2,color=isColor)
     return x
 
+def upsample_ESPCN(x,scale=2,features=64,isColor=False,activation=tf.nn.relu):
+
+    assert scale in [2,3,4], "Only support scale 2,3,4"
+
+    if isColor : ch = 3
+    else: ch = 1
+
+    #x = slim.conv2d(x,features,[3,3],activation_fn=activation)
+    if scale == 2:
+
+        ps_features = ch*(scale**2)
+        x = slim.conv2d(x,ps_features,[3,3],activation_fn=activation)
+        #x = slim.conv2d_transpose(x,ps_features,6,stride=1,activation_fn=activation)
+        x = PS(x,2,color=isColor)
+    elif scale == 3:
+        ps_features =ch*(scale**2)
+        x = slim.conv2d(x,ps_features,[3,3],activation_fn=activation)
+        #x = slim.conv2d_transpose(x,ps_features,9,stride=1,activation_fn=activation)
+        x = PS(x,3,color=isColor)
+    elif scale == 4:
+        ps_features = ch*(scale**2)
+        
+        x = slim.conv2d(x,ps_features,[3,3],activation_fn=activation)
+        #x = slim.conv2d_transpose(x,ps_features,6,stride=1,activation_fn=activation)
+        x = PS(x,4,color=isColor)
+    return x
+
 def _phase_shift(I, r):
     bsize, a, b, c = I.get_shape().as_list()
     bsize = tf.shape(I)[0] # Handling Dimension(None) type for undefined batch dim

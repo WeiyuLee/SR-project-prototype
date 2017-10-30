@@ -342,24 +342,50 @@ class model_zoo:
 
         with tf.name_scope("EDSR_v1"):       
 
-
+            
             net = nf.convolution_layer(self.inputs, model_params["conv1"], [1,1,1,1], name="conv1")
+            
+            
             shortcut1 = net
 
             with tf.name_scope("resblock"): 
                 resblock = []
                 [resblock.append(model_params['resblock']) for i in range(num_resblock)]
                 net = nf.edsr_resblock(net, resblock, repeations = num_resblock, scale = scaling_factor, name="resblock")
+            
             net = nf.convolution_layer(net, model_params["conv2"], [1,1,1,1], name="conv2")
-            net = net + shortcut1
-
+            
+            #net = net + shortcut1
+            
             with tf.name_scope("upsample"):
-                netowrk = nf.upsample(net, scale, feature_size, False,None)
+                netowrk = nf.upsample(net, scale, feature_size, True,None)
 
         return netowrk
 
+
+    def espcn_v1(self):
+
+    
+        model_params = {
+
+                        'conv1': [5,5,64],
+                        'conv2': [3,3,32],
+                        }
+
+        with tf.name_scope("espcn_v1"):       
+
+            
+            net = nf.convolution_layer(self.inputs, model_params["conv1"], [1,1,1,1], name="conv1") 
+            net = nf.convolution_layer(net, model_params["conv2"], [1,1,1,1], name="conv2")
+            
+            with tf.name_scope("upsample"):
+                netowrk = nf.upsample_ESPCN(net, 4, 0, False,None)
+
+        return netowrk
+
+
     def build_model(self, **kwargs):
-        model_list = ["googleLeNet_v1", "resNet_v1", "srcnn_v1", "grr_srcnn_v1", "grr_grid_srcnn_v1","edsr_v1"]
+        model_list = ["googleLeNet_v1", "resNet_v1", "srcnn_v1", "grr_srcnn_v1", "grr_grid_srcnn_v1","edsr_v1", "espcn_v1"]
         
         if self.model_ticket not in model_list:
             print("sorry, wrong ticket!")
