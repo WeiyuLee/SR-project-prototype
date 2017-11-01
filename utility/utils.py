@@ -56,7 +56,8 @@ def batch_shuffle_rndc(data, label, scale, subimage_size, index, batch_size):
 
         crop_data = []
         crop_label = []
-        for i in range(index, index+batch_size):
+        i = index
+        while i < index+batch_size:
             
             lridx = random_crop(scale, data[i].shape, subimage_size)
             crop_lr = data[i][lridx[0]:lridx[0]+subimage_size,
@@ -65,8 +66,13 @@ def batch_shuffle_rndc(data, label, scale, subimage_size, index, batch_size):
             crop_hr = label[i][lridx[0]*scale:lridx[0]*scale+scale*subimage_size,
                               lridx[1]*scale:lridx[1]*scale+scale*subimage_size,
                               :]
-            crop_data.append(crop_lr)
-            crop_label.append(crop_hr)    
+            #Reject small spatial gradient patch                  
+            patch_grad = np.mean(np.gradient(crop_hr))
+
+            if patch_grad > 40:
+                crop_data.append(crop_lr)
+                crop_label.append(crop_hr) 
+                i+=1   
 
         return crop_data, crop_label
 

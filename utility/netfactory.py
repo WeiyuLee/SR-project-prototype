@@ -18,11 +18,11 @@ def convolution_layer(inputs, kernel_shape, stride, name, flatten = False ,paddi
         
         try:
             weight = tf.get_variable("weights",rkernel_shape, tf.float32, initializer=initializer)
-            bias = tf.get_variable("bias",kernel_shape[2], tf.float32, initializer=initializer)
+            bias = tf.get_variable("bias",kernel_shape[2], tf.float32, initializer=tf.zeros_initializer())
         except:
             scope.reuse_variables()
             weight = tf.get_variable("weights",rkernel_shape, tf.float32, initializer=initializer)
-            bias = tf.get_variable("bias",kernel_shape[2], tf.float32, initializer=initializer)
+            bias = tf.get_variable("bias",kernel_shape[2], tf.float32, initializer=tf.zeros_initializer())
         
         net = tf.nn.conv2d(inputs, weight,stride, padding=padding)
         net = tf.add(net, bias)
@@ -129,7 +129,14 @@ def global_avg_pooling(inputs, flatten="False", name= 'global_avg_pooling'):
     
    
 
-### EDSR Specialized function 
+### EDSR Specialized function
+def resBlock(x,channels=64,kernel_size=[3,3],scale=1):
+    tmp = slim.conv2d(x,channels,kernel_size,activation_fn=None)
+    tmp = tf.nn.relu(tmp)
+    tmp = slim.conv2d(tmp,channels,kernel_size,activation_fn=None)
+    tmp *= scale
+    return x + tmp
+
 def edsr_resblock(inputs, kernel_shape, stride = [1,1,1,1], repeations = 1, scale = 1, name="resblock"):
 
     assert len(kernel_shape) == repeations, "Provide kernel shape shall be equal to repeations!"
@@ -142,8 +149,8 @@ def edsr_resblock(inputs, kernel_shape, stride = [1,1,1,1], repeations = 1, scal
             rkernel_shape = [k_shape[0], k_shape[1], pre_shape, k_shape[2]]     
             net = convolution_layer(inputs, rkernel_shape, stride, name= name + str(i) + "_1")
             net = convolution_layer(net, rkernel_shape, stride, name= name + str(i)+ "_2".format(2), activat_fn=None)
-            net = net*scale
-            inputs = inputs + net
+            net *= scale
+            inputs += net
 
 
     outputs = inputs

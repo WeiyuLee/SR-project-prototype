@@ -47,7 +47,7 @@ def split_img(imgname,img, padding_size, subimg_size):
     assert len(ori_size) == 3, "the dimensions of image shall be (height, width, channel)! " 
 
     #Calculate image size without padding
-    padded_size = [    ori_size[0] - 2*padding_size[0],
+    padded_size = [ ori_size[0] - 2*padding_size[0],
                     ori_size[1] - 2*padding_size[1],
                     ori_size[2]]
 
@@ -81,9 +81,9 @@ def merge_img(img_size, sub_images, padding_size,subimg_size, scale=2, down_scal
                     img_size[2]]
 
 
-    merged_image = np.zeros([    (padded_size[0]//subimg_size[0])*subimg_size[0],
+    merged_image = np.zeros([   (padded_size[0]//subimg_size[0])*subimg_size[0],
                                 (padded_size[1]//subimg_size[1])*subimg_size[1],
-                                 padded_size[2]])
+                                padded_size[2]])
     for k in sub_images:
 
 
@@ -108,7 +108,7 @@ def merge_img(img_size, sub_images, padding_size,subimg_size, scale=2, down_scal
 
 class becnchmark:
 
-    def run(self, inputs, target, psnr_mode='YCbCr'):
+    def run(self, inputs, target, psnr_mode='RGB'):
 
         self.input = inputs
         self.target = target
@@ -139,21 +139,21 @@ class becnchmark:
 
 
         mse = np.square(_input - _target)
+        
         mse = mse.mean()
-        psnr_val = 20*np.log10(255/(np.sqrt(mse)))    
-
-
+        psnr_val = 20*np.log10(255/(np.sqrt(mse))) 
+       
         return psnr_val
 
-    def _ssim(self, param = [0.01,0.03], L=255,guassian_kernel_size = (11,11), std = 1.5):
+    def _ssim(self, param = [0.01,0.03], L=255.,guassian_kernel_size = (11,11), std = 1.5):
 
         
 
         C1 = np.power(param[0]*L,2)
         C2 = np.power(param[1]*L,2)
 
-        _input = self.input
-        _target = self.target
+        _input = np.float32(self.input)
+        _target = np.float32(self.target)
 
         clipping = [guassian_kernel_size[0]//2, _input.shape[0] - guassian_kernel_size[0]//2,
                     guassian_kernel_size[1]//2, _input.shape[1] - guassian_kernel_size[0]//2]
@@ -202,7 +202,7 @@ def print_progress(type_name, current_progress, total_progress, percentage=True)
 
 class evaluation:
 
-    def __init__(self, data_root, dataset_list, scale_list, subimg_size, padding_size, channel = 1):
+    def __init__(self, data_root, dataset_list, scale_list, subimg_size, padding_size, channel = 3):
 
         """
             data_root: root path for all datasets in dataset list
@@ -241,30 +241,33 @@ class evaluation:
                 dataset_path = os.path.join(self.data_root, d, 'preprocessed_scale_'+str(scale))
                 
                 filelist = sorted(os.listdir(dataset_path))
-
-                assert len(filelist)%3 == 0, "Some data is missing"
+            
+                assert len(filelist)%2 == 0, "Some data is missing"
                 
-                for i in range(len(filelist)//3):
-                    LR_fname = filelist[i*3]
-                    Small_LR_fname = filelist[i*3 + 1]
-                    HR_fname = filelist[i*3 + 2]
-                    self.dataset_pair[d][scale][LR_fname.split("_")[0]] = {
+                for i in range(len(filelist)//2):
+
+                    HR_fname = filelist[i*2]
+                    LR_fname = filelist[i*2 + 1]
+                    self.dataset_pair[d][scale][LR_fname.split(".")[0]] = {
                                                                             'HR':os.path.join(dataset_path, HR_fname),
                                                                             'LR':os.path.join(dataset_path, LR_fname),
-                                                                            'small':os.path.join(dataset_path, Small_LR_fname)
+                                                                            #'small':os.path.join(dataset_path, Small_LR_fname)
                                                                         }
-
+              
         return self.dataset_pair
 
-    def input_setup(self, input_path, target_path, , sub_mean = False, padding_size = [3,3], subimg_size = [30,30], scale = 2):
+    def input_setup(self, input_path, target_path,  sub_mean = False, padding_size = [3,3], subimg_size = [30,30], scale = 2):
 
     
-        inputs = imread(input_path)
-        targets = imread(target_path)
-
+        #inputs = imread(input_path)
+        #targets = imread(target_path)
+        inputs = scipy.misc.imread(input_path, mode="RGB")
+        targets = scipy.misc.imread(target_path, mode="RGB")
+       
         if sub_mean:
-            inputs  = inputs - np.mean(inputs)
+            inputs  = inputs 
             targets  = targets - np.mean(targets)
+
 
         _, sout = split_img("input",inputs, padding_size, subimg_size)
 
@@ -279,7 +282,10 @@ class evaluation:
         subimg_size = [subimg_size[0]*scale, subimg_size[1]*scale]
         padded_size, target_split = split_img("target",targets, padding_size, subimg_size)
 
+
+
         target_merge = merge_img(padded_size, target_split, padding_size, subimg_size, 1)
+
 
         input_pair = {
                         'inputs':grid_stack,
@@ -289,7 +295,7 @@ class evaluation:
 
         return input_pair, np.mean(inputs), np.mean(targets)
 
-    def load_model(self, model_ticket, ckpt_file, scale, config = {}):
+    def load_model(self, model_ticket, ckpt_file, scale,  config = {}, isNormallized=True):
 
 
 
@@ -300,14 +306,16 @@ class evaluation:
                                                     int((self.subimg_size[1]+self.padding_size[1]*2)/scale),
                                                     self.channel])
 
+        if isNormallized: inputs_n = self.inputs/255.
+        else: inputs_n = self.inputs
 
-        mz = model_zoo.model_zoo(self.inputs, None, False, model_ticket)    
+        mz = model_zoo.model_zoo(inputs_n, None, False, model_ticket)    
         model_prediction = mz.build_model(config)
         sess = tf.Session()
         saver = tf.train.Saver()
         saver.restore(sess, ckpt_file)
 
-        return sess, model_prediction
+        return sess, model_prediction[1]
 
     def prediction(self, image, sess,model_prediction, scale):
 
@@ -315,11 +323,16 @@ class evaluation:
         run model in model_ticket_list and return prediction
         """
        
-        resize_image = sess.run(tf.image.resize_images(image[0] , [int((self.subimg_size[0]+self.padding_size[0]*2)/scale), int((self.subimg_size[1]+self.padding_size[1]*2)/scale)]))   
- 
+        resize_image = scipy.misc.imresize(image[0], [int((self.subimg_size[0]+self.padding_size[0]*2)/scale), int((self.subimg_size[1]+self.padding_size[1]*2)/scale)], interp="bicubic")     
+       
+        
         predicted = sess.run(model_prediction, feed_dict = {self.inputs:[resize_image]})
-            
-
+        
+        """
+        scipy.misc.imsave("input.png", image[0])
+        scipy.misc.imsave("grid.png", resize_image)    
+        scipy.misc.imsave("target.png", np.squeeze(predicted,[0]))  
+        """
         return predicted
 
 
@@ -401,7 +414,7 @@ class evaluation:
                                 if model_dict[mkey]["upsample"] == False:
                                     HR_img = dataset_scale[input_key]['HR']
                                     LR_img = dataset_scale[input_key]['LR']
-                                    scale = 1  
+                                    scale = self.scale  
                                 else:
                                     HR_img = dataset_scale[input_key]['HR']
                                     LR_img = dataset_scale[input_key]['HR']
@@ -420,7 +433,7 @@ class evaluation:
                             up_subimg_size = [subimg_size[0]*scale, subimg_size[1]*scale]
 
 
-                            sess, model_prediction = self.load_model(mkey,model_dict[mkey]["ckpt_file"],int(scale_key), model_dict[mkey]["model_config"])
+                            sess, model_prediction = self.load_model(mkey,model_dict[mkey]["ckpt_file"],int(scale_key), model_dict[mkey]["model_config"], model_dict[mkey]["isNormallized"])
 
                             for l in range(len(test_input)):
                                 if model_dict[mkey]["isGray"] == True: 
@@ -429,25 +442,30 @@ class evaluation:
                                 else:
                                     testimg = test_input[l]
                                     targetimg = input_pair['target']
-
-                                if model_dict[mkey]["isNormallized"] == True: 
-                                    testimg = testimg/255.
-                                    if l==0: targetimg = targetimg/255.
                                 
-                                m_out = self.prediction([testimg], sess, model_prediction, int(scale_key))                    
+                                
+                                m_out = self.prediction([testimg], sess, model_prediction, int(scale_key))    
+
                                 output_stack[key[l]] = np.squeeze(m_out,axis=0)
+                                #print("key[l]:{},{}".format(np.max(output_stack[key[l]]), np.min(output_stack[key[l]])))
                             
                             model_out = merge_img(targetimg.shape, output_stack, up_padding_size,up_subimg_size, scale, down_scale_by_model=False)    
-
-
-                            cv2.imwrite("test.png", model_out + in_mean)    
-                            cv2.imwrite("target.png", targetimg + tar_mean)                        
+                            #print("model_out: {},{}".format(np.max(model_out), np.min(model_out)))
+                            model_out = model_out*255.
                             
-                            if model_dict[mkey]["isNormallized"] == True: 
-                                model_out = model_out*255
-                                targetimg = targetimg*255
+                            #print("targetimg: {},{}".format(np.max(targetimg), np.min(targetimg)))
+                           
+                            #print(model_out.shape)
+                            #model_out = np.uint8(model_out)
+                            #targetimg = np.uint8(targetimg)
+                            
 
-
+                            #scipy.misc.imsave("test.png", model_out)   
+                            #scipy.misc.imsave("target.png", targetimg) 
+                            #model_out = scipy.misc.imread("test.png")   
+                            #targetimg = scipy.misc.imread("target.png") 
+                            #print(model_out)
+                            
                             results = becnchmark.run(model_out, targetimg)
                             bechmark_val[set_key][scale_key][mkey][input_key]["psnr"] = results[0]
                             bechmark_val[set_key][scale_key][mkey][input_key]["SSIM"] = results[1]
@@ -506,8 +524,6 @@ def main_process():
 
     conf = config.config(args.config).config
 
-    print(conf["evaluation"]["models"])
-    
     for midx in range(len(conf["evaluation"]["models"])):
 
         mkeys = list(conf["evaluation"]["models"][midx])[0]
