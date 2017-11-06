@@ -311,11 +311,14 @@ class evaluation:
 
         mz = model_zoo.model_zoo(inputs_n, None, False, model_ticket)    
         model_prediction = mz.build_model(config)
+        
+        print(model_prediction)
+        
         sess = tf.Session()
         saver = tf.train.Saver()
         saver.restore(sess, ckpt_file)
 
-        return sess, model_prediction[1]
+        return sess, model_prediction[0] #model_prediction[2]
 
     def prediction(self, image, sess,model_prediction, scale):
 
@@ -324,16 +327,17 @@ class evaluation:
         """
        
         resize_image = scipy.misc.imresize(image[0], [int((self.subimg_size[0]+self.padding_size[0]*2)/scale), int((self.subimg_size[1]+self.padding_size[1]*2)/scale)], interp="bicubic")     
-       
-        
+              
         predicted = sess.run(model_prediction, feed_dict = {self.inputs:[resize_image]})
+        #stg3_pred = sess.run(model_prediction[0], feed_dict = {self.inputs:[resize_image]})      
         
         """
         scipy.misc.imsave("input.png", image[0])
         scipy.misc.imsave("grid.png", resize_image)    
-        scipy.misc.imsave("target.png", np.squeeze(predicted,[0]))  
+        scipy.misc.imsave("target.png", np.squeeze(stg3_pred,[0]))  
         """
         return predicted
+        #return stg3_pred
 
 
 
@@ -450,18 +454,15 @@ class evaluation:
                                 #print("key[l]:{},{}".format(np.max(output_stack[key[l]]), np.min(output_stack[key[l]])))
                             
                             model_out = merge_img(targetimg.shape, output_stack, up_padding_size,up_subimg_size, scale, down_scale_by_model=False)    
-                            #print("model_out: {},{}".format(np.max(model_out), np.min(model_out)))
-                            model_out = model_out*255.
-                            
-                            #print("targetimg: {},{}".format(np.max(targetimg), np.min(targetimg)))
-                           
-                            #print(model_out.shape)
-                            #model_out = np.uint8(model_out)
-                            #targetimg = np.uint8(targetimg)
-                            
 
-                            #scipy.misc.imsave("test.png", model_out)   
-                            #scipy.misc.imsave("target.png", targetimg) 
+                            model_out = model_out*255.
+
+                           
+                            model_out = np.clip(model_out, 0, 255).astype('uint8')
+                            
+                            scipy.misc.imsave("test_{}.png".format(progress), model_out)   
+                            scipy.misc.imsave("target_{}.png".format(progress), targetimg) 
+                            
                             #model_out = scipy.misc.imread("test.png")   
                             #targetimg = scipy.misc.imread("target.png") 
                             #print(model_out)

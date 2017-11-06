@@ -379,10 +379,138 @@ class model_zoo:
 
         return netowrk
 
+    def grr_edsr_v2(self, kwargs):
+
+        scale = kwargs["scale"]
+        feature_size = kwargs["feature_size"]
+        scaling_factor = 1
+        num_resblock = 16
+            
+        model_params = {
+                        'conv1': [3,3,feature_size],
+                        'resblock': [3,3,feature_size],
+                        'conv2': [3,3,feature_size],
+                        'conv3': [3,3,3]
+                        }
+        
+        with tf.name_scope("EDSR_v1_stg1"):    
+            stg1_input = self.inputs
+            
+            stg1_x = nf.convolution_layer(stg1_input, model_params["conv1"], [1,1,1,1], name="conv1")
+            conv_stg1_1 = stg1_x
+            with tf.name_scope("resblock"): 
+            
+                    #Add the residual blocks to the model
+                    for i in range(num_resblock):
+                        stg1_x = nf.resBlock(stg1_x,feature_size,scale=scaling_factor)
+                    stg1_x = nf.convolution_layer(stg1_x, model_params["conv2"], [1,1,1,1], name="conv2")
+                    stg1_output = stg1_x + conv_stg1_1
+
+#            with tf.name_scope("upsamplex2"):
+#                    stg1_upsample2 = nf.upsample(stg1_output, 2, feature_size, True,None)
+#                    stg1_network = nf.convolution_layer(stg1_upsample2, model_params["conv3"], [1,1,1,1], name="conv3", activat_fn=None)
+#
+#            with tf.name_scope("upsamplex4"):
+#                    stg1_upsample4 = nf.upsample(stg1_upsample2, 2, feature_size, True,None)
+#                    stg1_network2 = nf.convolution_layer(stg1_upsample4, model_params["conv3"], [1,1,1,1], name="conv4", activat_fn=None)
+
+        with tf.name_scope("EDSR_v1_stg2"):     
+            stg2_input = nf.shortcut(self.inputs, stg1_output, "stg2_input")
+
+            stg2_x = nf.convolution_layer(stg2_input, model_params["conv1"], [1,1,1,1], name="conv1")
+            conv_stg2_1 = stg2_x
+            with tf.name_scope("resblock"): 
+            
+                    #Add the residual blocks to the model
+                    for i in range(num_resblock):
+                        stg2_x = nf.resBlock(stg2_x,feature_size,scale=scaling_factor)
+                    stg2_x = nf.convolution_layer(stg2_x, model_params["conv2"], [1,1,1,1], name="conv2")
+                    stg2_output = stg2_x + conv_stg2_1
+
+#            with tf.name_scope("upsamplex2"):
+#                    stg2_upsample2 = nf.upsample(stg2_output, 2, feature_size, True,None)
+#                    stg2_network = nf.convolution_layer(stg2_upsample2, model_params["conv3"], [1,1,1,1], name="conv3", activat_fn=None)
+#
+#            with tf.name_scope("upsamplex4"):
+#                    stg2_upsample4 = nf.upsample(stg2_upsample2, 2, feature_size, True,None)
+#                    stg2_network2 = nf.convolution_layer(stg2_upsample4, model_params["conv3"], [1,1,1,1], name="conv4", activat_fn=None)
+       
+        with tf.name_scope("EDSR_v1_stg3"):     
+            stg3_input = nf.shortcut(stg2_input, stg2_output, "stg3_input")
+
+            stg3_x = nf.convolution_layer(stg3_input, model_params["conv1"], [1,1,1,1], name="conv1")
+            conv_stg3_1 = stg3_x
+            with tf.name_scope("resblock"): 
+            
+                    #Add the residual blocks to the model
+                    for i in range(num_resblock):
+                        stg3_x = nf.resBlock(stg3_x,feature_size,scale=scaling_factor)
+                    stg3_x = nf.convolution_layer(stg3_x, model_params["conv2"], [1,1,1,1], name="conv2")
+                    stg3_output = stg3_x + conv_stg3_1
+
+            with tf.name_scope("upsamplex2"):
+                    stg3_upsample2 = nf.upsample(stg3_output, 2, feature_size, True,None)
+                    stg3_network = nf.convolution_layer(stg3_upsample2, model_params["conv3"], [1,1,1,1], name="conv3", activat_fn=None)
+
+            with tf.name_scope("upsamplex4"):
+                    stg3_upsample4 = nf.upsample(stg3_upsample2, 2, feature_size, True,None)
+                    stg3_network2 = nf.convolution_layer(stg3_upsample4, model_params["conv3"], [1,1,1,1], name="conv4", activat_fn=None)
+        
+        return [stg3_network, stg3_network2]
+
+    def GoogLeNet_edsr_v1(self, kwargs):
+
+        scale = kwargs["scale"]
+        feature_size = kwargs["feature_size"]
+        scaling_factor = 1
+        num_resblock = 16
+           
+        model_params = {
+                        'conv1': [9,9,feature_size],
+
+                        "inception_1":{                 
+                            'gn_1x1_conv1': [1,1,feature_size/2],
+                            'gn_1x1_resblock': [1,1,feature_size/2],
+                            'gn_1x1_conv2': [1,1,feature_size/2],
+
+                            'gn_3x3_conv1': [3,3,feature_size*2],
+                            'gn_3x3_resblock': [3,3,feature_size*2],
+                            'gn_3x3_conv2': [3,3,feature_size*2],
+    
+                            'gn_5x5_conv1': [5,5,feature_size*2],
+                            'gn_5x5_resblock': [5,5,feature_size*2],
+                            'gn_5x5_conv2': [5,5,feature_size*2],  
+                            
+                            'gn_s1x1_conv': [1,1,feature_size/4],
+                        },
+                                
+                        'conv2': [5,5,feature_size],                    
+                        
+                        'conv3': [3,3,3],    
+                        
+                        }
+                        
+        with tf.name_scope("GN_EDSR_v1"):     
+                            
+            x = nf.convolution_layer(self.inputs, model_params["conv1"], [1,1,1,1], name="conv1")
+
+            net = nf.gn_edsr_inception_v1(x, model_params, num_resblock, name= "inception_1", flatten=False)
+
+            x = nf.convolution_layer(net, model_params["conv2"], [1,1,1,1], name="conv2")
+
+            with tf.name_scope("upsamplex2"):
+                    upsample2 = nf.upsample(x, 2, feature_size, True,None)
+                    network = nf.convolution_layer(upsample2, model_params["conv3"], [1,1,1,1], name="conv3", activat_fn=None)
+
+            with tf.name_scope("upsamplex4"):
+                    upsample4 = nf.upsample(upsample2, 2, feature_size, True,None)
+                    network2 = nf.convolution_layer(upsample4, model_params["conv3"], [1,1,1,1], name="conv4", activat_fn=None)
+       
+        return [network, network2]
 
     def build_model(self, kwargs = {}):
 
-        model_list = ["googleLeNet_v1", "resNet_v1", "srcnn_v1", "grr_srcnn_v1", "grr_grid_srcnn_v1","edsr_v1", "espcn_v1","edsr_v2"]
+        model_list = ["googleLeNet_v1", "resNet_v1", "srcnn_v1", "grr_srcnn_v1", "grr_grid_srcnn_v1", "edsr_v1", "espcn_v1", "edsr_v2", "grr_edsr_v2", "GoogLeNet_edsr_v1"]
         
         if self.model_ticket not in model_list:
             print("sorry, wrong ticket!")

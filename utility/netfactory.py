@@ -99,6 +99,84 @@ def inception_v1(inputs, module_shape, name, flatten = False ,padding = 'SAME',i
             
             return net
 
+def gn_edsr_inception_v1(inputs, module_shape, num_resblock, name, flatten = False ,padding = 'SAME',initializer=tf.contrib.layers.xavier_initializer(), activat_fn=tf.nn.relu):
+    
+    with tf.variable_scope(name):
+        
+            with tf.variable_scope("gn_1x1"):
+                
+                kernel_shape = module_shape[name]["gn_1x1_conv1"]
+                net1x1 = convolution_layer(inputs, kernel_shape, [1,1,1,1], name="gn_1x1_conv1", padding=padding, initializer=initializer, activat_fn = None)
+                
+                # for shortcut
+                net1x1_conv1_sc = net1x1
+                
+                with tf.name_scope("resblock"): 
+                    #Add the residual blocks to the model
+                    kernel_shape = module_shape[name]["gn_1x1_resblock"]
+                    
+                    for i in range(num_resblock):
+                        net1x1 = resBlock(net1x1, kernel_shape[2], kernel_size = [kernel_shape[0], kernel_shape[1]])
+                    
+                kernel_shape = module_shape[name]["gn_1x1_conv2"]
+                net1x1 = convolution_layer(net1x1, kernel_shape, [1,1,1,1], name="gn_1x1_conv2", padding=padding, initializer=initializer, activat_fn = None)
+                
+                gn_1x1_output = net1x1 + net1x1_conv1_sc
+                
+            with tf.variable_scope("gn_3x3"):
+                
+                kernel_shape = module_shape[name]["gn_3x3_conv1"]
+                net3x3 = convolution_layer(inputs, kernel_shape, [1,1,1,1], name="gn_3x3_conv1", padding=padding, initializer=initializer, activat_fn = None)
+                
+                # for shortcut
+                net3x3_conv1_sc = net3x3
+                
+                with tf.name_scope("resblock"): 
+                    #Add the residual blocks to the model
+                    kernel_shape = module_shape[name]["gn_3x3_resblock"]
+                    
+                    for i in range(num_resblock):
+                        net3x3 = resBlock(net3x3, kernel_shape[2], kernel_size = [kernel_shape[0], kernel_shape[1]])
+                    
+                kernel_shape = module_shape[name]["gn_3x3_conv2"]
+                net3x3 = convolution_layer(net3x3, kernel_shape, [1,1,1,1], name="gn_3x3_conv2", padding=padding, initializer=initializer, activat_fn = None)
+                
+                gn_3x3_output = net3x3 + net3x3_conv1_sc
+                
+            with tf.variable_scope("gn_5x5"):
+                
+                kernel_shape = module_shape[name]["gn_5x5_conv1"]
+                net5x5 = convolution_layer(inputs, kernel_shape, [1,1,1,1], name="gn_5x5_conv1", padding=padding, initializer=initializer, activat_fn = None)
+                
+                # for shortcut
+                net5x5_conv1_sc = net5x5
+                
+                with tf.name_scope("resblock"): 
+                    #Add the residual blocks to the model
+                    kernel_shape = module_shape[name]["gn_5x5_resblock"]
+                    
+                    for i in range(num_resblock):
+                        net5x5 = resBlock(net5x5, kernel_shape[2], kernel_size = [kernel_shape[0], kernel_shape[1]])
+                    
+                kernel_shape = module_shape[name]["gn_5x5_conv2"]
+                net5x5 = convolution_layer(net5x5, kernel_shape, [1,1,1,1], name="gn_5x5_conv2", padding=padding, initializer=initializer, activat_fn = None)
+                
+                gn_5x5_output = net5x5 + net5x5_conv1_sc
+                
+            with tf.variable_scope("gn_s1x1"):
+                            
+                kernel_shape = module_shape[name]["gn_s1x1_conv"]
+                nets1x1 = convolution_layer(inputs, kernel_shape, [1,1,1,1], name="gn_s1x1_conv", padding=padding, initializer=initializer, activat_fn = None)                              
+                gn_s1x1_output = nets1x1
+            
+            net = tf.concat([gn_1x1_output, gn_3x3_output, gn_5x5_output, gn_s1x1_output], axis=3)
+            
+            if flatten == True:
+                net = tf.reshape(net, [-1, int(np.prod(net.get_shape()[1:]))], name=name+"_flatout")
+                
+            
+            return net
+
 
 def shortcut(inputs, identity, name):  #Use 1X1 conv with proper stride to match dimesions
     
@@ -108,8 +186,7 @@ def shortcut(inputs, identity, name):  #Use 1X1 conv with proper stride to match
     dim_diff = [res_shape[1]/in_shape[1],
                 res_shape[2]/in_shape[2]]
     
-    
-    if dim_diff[0] > 1  and dim_diff[1] > 1:
+    if dim_diff[0] >= 1  and dim_diff[1] >= 1:
     
         identity = convolution_layer(identity, [1,1,in_shape[3]], [1,dim_diff[0],dim_diff[1],1], name="shotcut", padding="VALID")
     

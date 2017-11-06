@@ -79,6 +79,107 @@ class config:
 		eval_config["models"] = [srcnn(self)]
 		eval_config["summary_file"] = "example_summary.txt"
 
+	def wei_edsr(self):
+
+		train_config = self.config["train"]
+
+		train_config["mode"] = "small" # Operation mode: normal or freq [normal]
+		train_config["epoch"] = 20000  # Number of epoch [10]
+		train_config["batch_size"] = 16 # The size of batch images [128]
+		train_config["image_size"] = 48 # The size of image to use [33]
+		train_config["label_size"] = 96 # The size of label to produce [21]
+		train_config["learning_rate"] = 1e-4 #The learning rate of gradient descent algorithm [1e-4]
+		train_config["color_dim"] = 3 # Dimension of image color. [1]
+		train_config["scale"] = 2 # The size of scale factor for preprocessing input image [3]
+		train_config["train_extract_stride"] = 14 #The size of stride to apply input image [14]
+		train_config["test_extract_stride"] = train_config["label_size"] #The size of stride to apply input image [14]
+		train_config["checkpoint_dir"] = "/home/wei/ML/model/SuperResolution/SR-project-prototype/" #Name of checkpoint directory [checkpoint]
+		train_config["log_dir"] = "/home/wei/ML/model/SuperResolution/SR-project-prototype/log/" #Name of checkpoint directory [checkpoint]
+		train_config["output_dir"] = "output" # Name of sample directory [output]
+		train_config["train_dir"] =  "Train" # Name of train dataset directory
+		train_config["test_dir"] = "Test/Set5" # Name of test dataset directory [Test/Set5]
+		train_config["h5_dir"] = "preprocess/output" # Name of train dataset .h5 file
+		train_config["train_h5_name"] = "train" # Name of train dataset .h5 file
+		train_config["test_h5_name"] = "test" # Name of test dataset .h5 file
+		train_config["ckpt_name"] = "temp_grr_edsr_s2_stg3" # Name of checkpoints
+		train_config["is_train"] = True # True for training, False for testing [True]
+		train_config["model_ticket"] = "grr_edsr_v2" # Name of checkpoints
+
+		def edsrv1(self):
+						
+			mconfig = {}
+			mconfig["grr_edsr_v2"] = {
+
+										"scale":[2],
+										"subimages":[80,80],
+										"padding":[4,4],
+										"ckpt_file":"/home/wei/ML/model/SuperResolution/SR-project-prototype/temp_grr_edsr_s2_stg3/best_performance/temp_grr_edsr_s2_stg3_0.006684903986752033-190176",
+                              #"ckpt_file":"/home/wei/ML/model/SuperResolution/SR-project-prototype/edsr_base_s2/EDSR_base_v3_s4-559384",
+										"isGray": False,
+										"isNormallized":True,
+										"upsample": True,
+										"sub_mean":False,
+										"model_config" :{"scale":2, "feature_size" : 64}
+										}
+			return mconfig
+
+
+		eval_config = self.config["evaluation"]
+		eval_config["dataroot"] = '/home/wei/ML/dataset/SuperResolution/'
+		eval_config["test_set"] = ["Set5"]
+		eval_config["models"] = [edsrv1(self)]
+		eval_config["summary_file"] = "example_summary.txt"
+
+	def wei_gn_edsr(self):
+
+		train_config = self.config["train"]
+
+		train_config["mode"] = "small" # Operation mode: normal or freq [normal]
+		train_config["epoch"] = 20000  # Number of epoch [10]
+		train_config["batch_size"] = 16 # The size of batch images [128]
+		train_config["image_size"] = 48 # The size of image to use [33]
+		train_config["label_size"] = 96 # The size of label to produce [21]
+		train_config["learning_rate"] = 1e-4 #The learning rate of gradient descent algorithm [1e-4]
+		train_config["color_dim"] = 3 # Dimension of image color. [1]
+		train_config["scale"] = 2 # The size of scale factor for preprocessing input image [3]
+		train_config["train_extract_stride"] = 14 #The size of stride to apply input image [14]
+		train_config["test_extract_stride"] = train_config["label_size"] #The size of stride to apply input image [14]
+		train_config["checkpoint_dir"] = "/home/wei/ML/model/SuperResolution/SR-project-prototype/" #Name of checkpoint directory [checkpoint]
+		train_config["log_dir"] = "/home/wei/ML/model/SuperResolution/SR-project-prototype/log/" #Name of checkpoint directory [checkpoint]
+		train_config["output_dir"] = "output" # Name of sample directory [output]
+		train_config["train_dir"] =  "Train" # Name of train dataset directory
+		train_config["test_dir"] = "Test/Set5" # Name of test dataset directory [Test/Set5]
+		train_config["h5_dir"] = "preprocess/output" # Name of train dataset .h5 file
+		train_config["train_h5_name"] = "train" # Name of train dataset .h5 file
+		train_config["test_h5_name"] = "test" # Name of test dataset .h5 file
+		train_config["ckpt_name"] = "temp_GoogLeNet_edsr_v1_s2" # Name of checkpoints
+		train_config["is_train"] = True # True for training, False for testing [True]
+		train_config["model_ticket"] = "GoogLeNet_edsr_v1" # Name of checkpoints
+
+		def edsrv1(self):
+						
+			mconfig = {}
+			mconfig["GoogLeNet_edsr_v1"] = {
+
+										"scale":[2],
+										"subimages":[48,48],
+										"padding":[8,8],
+										"ckpt_file":"/home/wei/ML/model/SuperResolution/SR-project-prototype/temp_GoogLeNet_edsr_v1_s2/best_performance/temp_GoogLeNet_edsr_v1_s2_0.008859117515385151-616",
+										"isGray": False,
+										"isNormallized":True,
+										"upsample": True,
+										"sub_mean":False,
+										"model_config" :{"scale":2, "feature_size" : 64}
+										}
+			return mconfig
+
+
+		eval_config = self.config["evaluation"]
+		eval_config["dataroot"] = '/home/wei/ML/dataset/SuperResolution/'
+		eval_config["test_set"] = ["Set5"]
+		eval_config["models"] = [edsrv1(self)]
+		eval_config["summary_file"] = "example_summary.txt"
+
 	def jesse_edsr(self):
 
 		train_config = self.config["train"]
