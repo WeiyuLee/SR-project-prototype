@@ -1,0 +1,5 @@
+Dataset,Model,Iteration,PSNR,SSIM
+set5,base* (Relu),2000,37.545,0.95982
+set5,base*_3_att_onehot,12000,37.8591,0.96169
+set5,base*_3_arr_softmax,20000,37.9259,0.96202
+set5,base*_1x1,12000,37.8817,0.96173
