@@ -157,12 +157,13 @@ def edsr_resblock(inputs, kernel_shape, stride = [1,1,1,1], repeations = 1, scal
 
     return outputs
 
-def upsample(x,scale=2,features=64,isColor=False,activation=tf.nn.relu):
+def upsample(x,scale=2,features=64,channels = 3,activation=tf.nn.relu):
 
     assert scale in [2,3,4], "Only support scale 2,3,4"
+    ch = channels 
 
-    if isColor : ch = 3
-    else: ch = 1
+    if ch == 3: isColor = True
+    else: isColor = False
 
     x = slim.conv2d(x,features,[3,3],activation_fn=activation)
     if scale == 2:
@@ -182,6 +183,142 @@ def upsample(x,scale=2,features=64,isColor=False,activation=tf.nn.relu):
             x = slim.conv2d(x,ps_features,[3,3],activation_fn=activation)
             #x = slim.conv2d_transpose(x,ps_features,6,stride=1,activation_fn=activation)
             x = PS(x,2,color=isColor)
+    return x
+
+def upsample_attention(x, att_weight, scale=2,features=64,channels = 3,  attentions = 1,activation=tf.nn.relu):
+
+    assert scale in [2,3,4], "Only support scale 2,3,4"
+    ch = channels
+    if ch == 3: isColor = True
+    else: isColor = False
+
+    bsize, a, b, c = x.get_shape().as_list()
+    bsize = tf.shape(x)[0]
+
+    x = slim.conv2d(x,features,[3,3],activation_fn=activation)
+    if scale == 2:
+
+        ps_features = ch*(scale**2)*attentions
+        x = slim.conv2d(x,ps_features,[3,3],activation_fn=activation)
+
+        # Attention layer
+       
+        x = tf.reshape(x, (bsize, a, b, ch*(scale**2), attentions))
+        x = tf.multiply(x, att_weight)
+        x = tf.reduce_sum(x,4) 
+        #x = slim.conv2d_transpose(x,ps_features,6,stride=1,activation_fn=activation)
+        x = PS(x,2,color=isColor)
+    elif scale == 3:
+        ps_features =ch*(scale**2)*attentions
+        x = slim.conv2d(x,ps_features,[3,3],activation_fn=activation)
+
+        # Attention layer
+        x = tf.reshape(x, (bsize, a, b, ch*(scale**2), attentions))
+        x = tf.multiply(x, att_weight)
+        x = tf.reduce_sum(x,4) 
+        #x = slim.conv2d_transpose(x,ps_features,9,stride=1,activation_fn=activation)
+        x = PS(x,3,color=isColor)
+    elif scale == 4:
+        ps_features = ch*(2**2)*attentions
+        for i in range(2):
+            x = slim.conv2d(x,ps_features,[3,3],activation_fn=activation)
+             # Attention layer
+            x = tf.reshape(x, (bsize, a, b, ch*(scale**2), attentions))
+            x = tf.multiply(x, att_weight)
+            x = tf.reduce_sum(x,4) 
+            #x = slim.conv2d_transpose(x,ps_features,6,stride=1,activation_fn=activation)
+            x = PS(x,2,color=isColor)
+    return x
+
+
+def upsample_local_attention(x, att_weight, scale=2,features=64,channels = 3,  attentions = 1,activation=tf.nn.relu):
+
+    assert scale in [2,3,4], "Only support scale 2,3,4"
+    ch = channels
+    if ch == 3: isColor = True
+    else: isColor = False
+
+    bsize, a, b, c = x.get_shape().as_list()
+    bsize = tf.shape(x)[0]
+
+    x = slim.conv2d(x,features,[1,1],activation_fn=activation)
+    if scale == 2:
+
+        ps_features = ch*(scale**2)*attentions
+        x = slim.conv2d(x,ps_features,[1,1],activation_fn=activation)
+
+        # Attention layer  
+        x = tf.reshape(x, (bsize, 48,a//48, 48, b//48, ch*(scale**2), attentions))
+        x = tf.multiply(x, att_weight)
+        x = tf.reshape(x, (bsize,a,b,ch*(scale**2), attentions))
+        x = tf.reduce_sum(x,4) 
+        x = tf.reshape(x, (bsize,a,b,ch*(scale**2)))
+        #x = slim.conv2d_transpose(x,ps_features,6,stride=1,activation_fn=activation)
+        x = PS(x,2,color=isColor)
+
+    elif scale == 3:
+        ps_features =ch*(scale**2)*attentions
+        x = slim.conv2d(x,ps_features,[1,1],activation_fn=activation)
+
+        # Attention layer
+        x = tf.reshape(x, (bsize, a, b, ch*(scale**2), attentions))
+        x = tf.multiply(x, att_weight)
+        x = tf.reduce_sum(x,4) 
+        #x = slim.conv2d_transpose(x,ps_features,9,stride=1,activation_fn=activation)
+        x = PS(x,3,color=isColor)
+
+    elif scale == 4:
+        ps_features = ch*(2**2)*attentions
+        for i in range(2):
+            x = slim.conv2d(x,ps_features,[3,3],activation_fn=activation)
+             # Attention layer
+            x = tf.reshape(x, (bsize, 12,a//12, 12, b//12, ch*(scale**2), attentions))
+            x = tf.multiply(x, att_weight)
+            x = tf.reshape(x, (bsize,a,b,ch*(scale**2), attentions))
+            x = tf.reduce_sum(x,4) 
+            x = tf.reshape(x, (bsize,a,b,ch*(scale**2)))
+            #x = slim.conv2d_transpose(x,ps_features,6,stride=1,activation_fn=activation)
+            x = PS(x,2,color=isColor)
+    return x
+
+
+def upsample_local_attention_v2(x, att_weight, kernel_size = 3,scale=2, portion = 4,features=64,channels = 3,  attentions = 1,activation=tf.nn.relu):
+
+    assert scale in [2,3,4], "Only support scale 2,3,4"
+    ch = channels
+    if ch == 3: isColor = True
+    else: isColor = False
+
+
+    bsize, a, b, c = x.get_shape().as_list()
+    bsize = tf.shape(x)[0]
+
+    x = slim.conv2d(x,features,[kernel_size,kernel_size],activation_fn=activation)
+    if scale == 2:
+
+        ps_features = ch*(scale**2)*attentions
+        x = slim.conv2d(x,ps_features,[kernel_size,kernel_size],activation_fn=activation)
+
+        # Attention layer  
+        x = tf.reshape(x, (bsize, portion,a//portion, portion, b//portion, ch*(scale**2), attentions))
+        x = tf.multiply(x, att_weight)
+        x = tf.reshape(x, (bsize,a,b,ch*(scale**2), attentions))
+        x = tf.reduce_sum(x,4) 
+        x = tf.reshape(x, (bsize,a,b,ch*(scale**2)))
+        #x = slim.conv2d_transpose(x,ps_features,6,stride=1,activation_fn=activation)
+        x = PS(x,2,color=isColor)
+
+    elif scale == 3:
+        ps_features =ch*(scale**2)*attentions
+        x = slim.conv2d(x,ps_features,[1,1],activation_fn=activation)
+
+        # Attention layer
+        x = tf.reshape(x, (bsize, a, b, ch*(scale**2), attentions))
+        x = tf.multiply(x, att_weight)
+        x = tf.reduce_sum(x,4) 
+        #x = slim.conv2d_transpose(x,ps_features,9,stride=1,activation_fn=activation)
+        x = PS(x,3,color=isColor)
+
     return x
 
 def upsample_ESPCN(x,scale=2,features=64,isColor=False,activation=tf.nn.relu):

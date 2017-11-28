@@ -21,8 +21,12 @@ from utils import (
   read_data, 
   batch_shuffle_rndc,
   batch_shuffle,
-  log10
+  log10,
+  laplacian_filter
 )
+
+
+
 
 class MODEL(object):
     def __init__(self, 
@@ -97,7 +101,10 @@ class MODEL(object):
         
         self.model_ticket = model_ticket
         
-        self.model_list = ["googleLeNet_v1", "resNet_v1", "srcnn_v1", "grr_srcnn_v1", "grr_grid_srcnn_v1", "espcn_v1", "edsr_v1","edsr_v2"]
+        self.model_list = ["googleLeNet_v1", "resNet_v1", "srcnn_v1", "grr_srcnn_v1", 
+                           "grr_grid_srcnn_v1", "espcn_v1", "edsr_v1","edsr_v2","edsr_attention_v1",
+                           "edsr_1X1_v1", "edsr_local_att_v1", "edsr_attention_v2",
+                           "edsr_local_att_v2_upsample"]
         
         self.build_model()        
     
@@ -844,6 +851,8 @@ class MODEL(object):
                 summary_writer.add_summary(test_sum, ep)
 
 
+
+
     def build_edsr_v2(self):###
         """
         Build SRCNN model
@@ -869,7 +878,8 @@ class MODEL(object):
         # Build model
         logits2, logits4 = mz.build_model({"scale":self.scale,"feature_size" :64})
 
-        
+        lap_logit2 = laplacian_filter(logits2)
+        lap_logit4 = laplacian_filter(logits4)
 
         self.l1_loss2 = tf.reduce_mean(tf.losses.absolute_difference(target,logits2))
         self.l1_loss4 = tf.reduce_mean(tf.losses.absolute_difference(target,logits4))
@@ -901,6 +911,7 @@ class MODEL(object):
             tf.summary.image("input_image",self.input , collections=['train'])
             tf.summary.image("target_image",target*255, collections=['train'])
             tf.summary.image("output_image",self.logits*255, collections=['train'])
+            tf.summary.scalar("lap2",lap_logit2, collections=['train'])
             
             self.merged_summary_train = tf.summary.merge_all('train')          
             
@@ -979,7 +990,7 @@ class MODEL(object):
                                                                                         self.dropout: 1.,
                                                                                         self.lr:learning_rate})
                                                            
-    
+                
                 batch_pbar.set_description("Batch: [%2d], L1:%.2f" % (idx+1, train_loss))
                 #batch_pbar.refresh()
               
@@ -1010,7 +1021,331 @@ class MODEL(object):
                 summary_writer.add_summary(test_sum, ep)
         
               
+    def build_edsr_attention_v1(self):###
+        """
+        Build SRCNN model
+        """        
+        # Define input and label images
+        self.input = tf.placeholder(tf.float32, [None, self.image_size, self.image_size, self.color_dim], name='images')
+        self.image_target = tf.placeholder(tf.float32, [None, None, None, self.color_dim], name='labels')
+        self.dropout = tf.placeholder(tf.float32, name='dropout')
+        self.is_training = tf.placeholder(tf.bool, name='is_training')
+        self.lr = tf.placeholder(tf.float32, name='learning_rate')
+        
+        self.image_input = self.input/255.
+        self.target = target = self.image_target/255.
+        
+        # Initial model_zoo
+        mz = model_zoo.model_zoo(self.image_input, self.dropout, self.is_train, self.model_ticket)
+        
+        # Build model
+        logits2, logits4, self.testw = mz.build_model({"scale":self.scale,"feature_size" :64,"dropout":self.dropout, 
+                                            "is_training":self.is_training})
 
+        
+        self.l1_loss2 = tf.reduce_mean(tf.losses.absolute_difference(target,logits2))
+        self.l1_loss4 = tf.reduce_mean(tf.losses.absolute_difference(target,logits4))
+  
+        self.train_op2 = tf.train.AdamOptimizer(self.lr).minimize(self.l1_loss2)
+        self.train_op4 = tf.train.AdamOptimizer(self.lr).minimize(self.l1_loss4)
+
+        if self.scale == 2:
+
+            self.logits = logits2
+            self.l1_loss = self.l1_loss2
+            self.train_op = self.train_op2
+        
+        elif self.scale == 4:
+
+            self.logits = logits4
+            self.l1_loss = self.l1_loss4
+            self.train_op = self.train_op4
+
+        mse = tf.reduce_mean(tf.squared_difference(target*255.,self.logits*255.))    
+        PSNR = tf.constant(255**2,dtype=tf.float32)/mse
+        PSNR = tf.constant(10,dtype=tf.float32)*log10(PSNR)
+
+        
+        with tf.name_scope('train_summary'):
+            tf.summary.scalar("loss", self.l1_loss, collections=['train'])
+            tf.summary.scalar("MSE", mse, collections=['train'])
+            tf.summary.scalar("PSNR",PSNR, collections=['train'])
+            tf.summary.image("input_image",self.input , collections=['train'])
+            tf.summary.image("target_image",target*255, collections=['train'])
+            tf.summary.image("output_image",self.logits*255, collections=['train'])
+            
+            self.merged_summary_train = tf.summary.merge_all('train')          
+            
+        with tf.name_scope('test_summary'):
+            tf.summary.scalar("loss", self.l1_loss, collections=['test'])
+            tf.summary.scalar("PSNR",PSNR,  collections=['test'])
+            tf.summary.scalar("MSE", mse, collections=['test'])
+            tf.summary.image("input_image",self.input, collections=['test'])
+            tf.summary.image("target_image",target*255 , collections=['test'])
+            tf.summary.image("output_image",self.logits*255, collections=['test'])
+
+            self.merged_summary_test = tf.summary.merge_all('test')                 
+        
+        self.saver = tf.train.Saver()
+
+        
+    def train_edsr_attention_v1(self):
+        """
+        Training process.
+        """     
+        print("Training...")
+
+        # Define dataset path
+
+    
+        test_dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/Set5/preprocessed_scale_"+str(self.scale),type="test")
+        dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/DIV2K/")
+
+        log_dir = os.path.join(self.log_dir, self.ckpt_name, "log")
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+        summary_writer = tf.summary.FileWriter(log_dir, self.sess.graph)    
+    
+        self.sess.run(tf.global_variables_initializer())
+
+        if self.load_ckpt(self.checkpoint_dir, self.ckpt_name):
+            print(" [*] Load SUCCESS")
+        else:
+            print(" [!] Load failed...")
+
+        
+       
+        # Define iteration counter, timer and average loss
+        itera_counter = 0
+        learning_rate = 1e-4
+        #train_batch_num = len(train_data) // self.batch_size
+
+        epoch_pbar = tqdm(range(self.epoch))
+        for ep in epoch_pbar:            
+            # Run by batch images
+            random.shuffle(dataset) 
+            train_data, train_label  = zip(*dataset)
+            test_data, test_label  = zip(*test_dataset)
+
+            epoch_pbar.set_description("Epoch: [%2d], lr:%f" % ((ep+1), learning_rate))
+            epoch_pbar.refresh()
+        
+            batch_pbar = tqdm(range(0, len(train_data)//self.batch_size), desc="Batch: [0]")
+            
+           
+            if ep%8000 == 0 and ep != 0 and learning_rate >= 2.5e-5:learning_rate = learning_rate/2
+
+            for idx in batch_pbar:                
+                        
+                itera_counter += 1
+                batch_index = idx*self.batch_size 
+                batch_images, batch_labels = batch_shuffle_rndc(train_data, train_label, self.scale, self.image_size,batch_index, self.batch_size)
+                
+                
+                #print(batch_images, batch_labels)
+                
+                # Run the model
+                _, train_loss = self.sess.run([self.train_op, self.l1_loss],
+                                                                             feed_dict={self.input: batch_images, 
+                                                                                        self.image_target: batch_labels,
+                                                                                        self.dropout: 0.6,
+                                                                                        self.is_training:True,
+                                                                                        self.lr:learning_rate})
+
+    
+                batch_pbar.set_description("Batch: [%2d], L1:%.2f" % (idx+1, train_loss))
+                #batch_pbar.refresh()
+              
+            if ep % 50 == 0:
+                self.save_ckpt(self.checkpoint_dir, self.ckpt_name, itera_counter)
+                
+                train_sum, train_loss = self.sess.run([self.merged_summary_train, self.l1_loss], 
+                                                                                                feed_dict={
+                                                                                                    self.input: batch_images, 
+                                                                                                    self.image_target: batch_labels,
+                                                                                                    self.dropout: 1.,
+                                                                                                    self.is_training:False})
+
+                batch_test_images, batch_test_labels = batch_shuffle_rndc(test_data, test_label, self.scale, self.image_size, 0, 5)
+                test_sum, test_loss = self.sess.run([self.merged_summary_test, self.l1_loss], 
+                                                                                                feed_dict={
+                                                                                                    self.input: batch_test_images, 
+                                                                                                    self.image_target: batch_test_labels,
+                                                                                                    self.dropout: 1.,
+                                                                                                    self.is_training:False})
+                                                                                                                       
+
+               
+                    
+                print("Epoch: [{}], Train_loss: {}".format((ep+1), train_loss))     
+                print("Epoch: [{}], Test_loss: {}".format((ep+1), test_loss))  
+                
+                
+                summary_writer.add_summary(train_sum, ep)
+                summary_writer.add_summary(test_sum, ep)
+
+    def build_edsr_1X1_v1(self):###
+        """
+        Build SRCNN model
+        """        
+        # Define input and label images
+        self.input = tf.placeholder(tf.float32, [None, self.image_size, self.image_size, self.color_dim], name='images')
+        self.image_target = tf.placeholder(tf.float32, [None, None, None, self.color_dim], name='labels')
+        self.dropout = tf.placeholder(tf.float32, name='dropout')
+        self.is_training = tf.placeholder(tf.bool, name='is_training')
+        self.lr = tf.placeholder(tf.float32, name='learning_rate')
+        
+        self.image_input = self.input/255.
+        self.target = target = self.image_target/255.
+        
+        # Initial model_zoo
+        mz = model_zoo.model_zoo(self.image_input, self.dropout, self.is_train, self.model_ticket)
+        
+        # Build model
+        logits2, logits4 = mz.build_model({"scale":self.scale,"feature_size" :64,"dropout":self.dropout, 
+                                            "is_training":self.is_training})
+
+        
+        self.l1_loss2 = tf.reduce_mean(tf.losses.absolute_difference(target,logits2))
+        self.l1_loss4 = tf.reduce_mean(tf.losses.absolute_difference(target,logits4))
+  
+        self.train_op2 = tf.train.AdamOptimizer(self.lr).minimize(self.l1_loss2)
+        self.train_op4 = tf.train.AdamOptimizer(self.lr).minimize(self.l1_loss4)
+
+        if self.scale == 2:
+
+            self.logits = logits2
+            self.l1_loss = self.l1_loss2
+            self.train_op = self.train_op2
+        
+        elif self.scale == 4:
+
+            self.logits = logits4
+            self.l1_loss = self.l1_loss4
+            self.train_op = self.train_op4
+
+        mse = tf.reduce_mean(tf.squared_difference(target*255.,self.logits*255.))    
+        PSNR = tf.constant(255**2,dtype=tf.float32)/mse
+        PSNR = tf.constant(10,dtype=tf.float32)*log10(PSNR)
+
+        
+        with tf.name_scope('train_summary'):
+            tf.summary.scalar("loss", self.l1_loss, collections=['train'])
+            tf.summary.scalar("MSE", mse, collections=['train'])
+            tf.summary.scalar("PSNR",PSNR, collections=['train'])
+            tf.summary.image("input_image",self.input , collections=['train'])
+            tf.summary.image("target_image",target*255, collections=['train'])
+            tf.summary.image("output_image",self.logits*255, collections=['train'])
+            
+            self.merged_summary_train = tf.summary.merge_all('train')          
+            
+        with tf.name_scope('test_summary'):
+            tf.summary.scalar("loss", self.l1_loss, collections=['test'])
+            tf.summary.scalar("PSNR",PSNR,  collections=['test'])
+            tf.summary.scalar("MSE", mse, collections=['test'])
+            tf.summary.image("input_image",self.input, collections=['test'])
+            tf.summary.image("target_image",target*255 , collections=['test'])
+            tf.summary.image("output_image",self.logits*255, collections=['test'])
+
+            self.merged_summary_test = tf.summary.merge_all('test')                 
+        
+        self.saver = tf.train.Saver()
+
+        
+    def train_edsr_1X1_v1(self):
+        """
+        Training process.
+        """     
+        print("Training...")
+
+        # Define dataset path
+
+    
+        test_dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/Set5/preprocessed_scale_"+str(self.scale),type="test")
+        dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/DIV2K/")
+
+        log_dir = os.path.join(self.log_dir, self.ckpt_name, "log")
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+        summary_writer = tf.summary.FileWriter(log_dir, self.sess.graph)    
+    
+        self.sess.run(tf.global_variables_initializer())
+
+        if self.load_ckpt(self.checkpoint_dir, self.ckpt_name):
+            print(" [*] Load SUCCESS")
+        else:
+            print(" [!] Load failed...")
+
+        
+       
+        # Define iteration counter, timer and average loss
+        itera_counter = 0
+        learning_rate = 1e-4
+        #train_batch_num = len(train_data) // self.batch_size
+
+        epoch_pbar = tqdm(range(self.epoch))
+        for ep in epoch_pbar:            
+            # Run by batch images
+            random.shuffle(dataset) 
+            train_data, train_label  = zip(*dataset)
+            test_data, test_label  = zip(*test_dataset)
+
+            epoch_pbar.set_description("Epoch: [%2d], lr:%f" % ((ep+1), learning_rate))
+            epoch_pbar.refresh()
+        
+            batch_pbar = tqdm(range(0, len(train_data)//self.batch_size), desc="Batch: [0]")
+            
+           
+            if ep%8000 == 0 and ep != 0 and learning_rate >= 2.5e-5:learning_rate = learning_rate/2
+
+            for idx in batch_pbar:                
+                        
+                itera_counter += 1
+                batch_index = idx*self.batch_size 
+                batch_images, batch_labels = batch_shuffle_rndc(train_data, train_label, self.scale, self.image_size,batch_index, self.batch_size)
+                
+                
+                #print(batch_images, batch_labels)
+                
+                # Run the model
+                _, train_loss = self.sess.run([self.train_op, self.l1_loss],
+                                                                             feed_dict={self.input: batch_images, 
+                                                                                        self.image_target: batch_labels,
+                                                                                        self.dropout: 0.6,
+                                                                                        self.is_training:True,
+                                                                                        self.lr:learning_rate})
+
+    
+                batch_pbar.set_description("Batch: [%2d], L1:%.2f" % (idx+1, train_loss))
+                #batch_pbar.refresh()
+              
+            if ep % 50 == 0:
+                self.save_ckpt(self.checkpoint_dir, self.ckpt_name, itera_counter)
+                
+                train_sum, train_loss = self.sess.run([self.merged_summary_train, self.l1_loss], 
+                                                                                                feed_dict={
+                                                                                                    self.input: batch_images, 
+                                                                                                    self.image_target: batch_labels,
+                                                                                                    self.dropout: 1.,
+                                                                                                    self.is_training:False})
+
+                batch_test_images, batch_test_labels = batch_shuffle_rndc(test_data, test_label, self.scale, self.image_size, 0, 5)
+                test_sum, test_loss = self.sess.run([self.merged_summary_test, self.l1_loss], 
+                                                                                                feed_dict={
+                                                                                                    self.input: batch_test_images, 
+                                                                                                    self.image_target: batch_test_labels,
+                                                                                                    self.dropout: 1.,
+                                                                                                    self.is_training:False})
+                                                                                                                       
+
+               
+                    
+                print("Epoch: [{}], Train_loss: {}".format((ep+1), train_loss))     
+                print("Epoch: [{}], Test_loss: {}".format((ep+1), test_loss))  
+                
+                
+                summary_writer.add_summary(train_sum, ep)
+                summary_writer.add_summary(test_sum, ep)
                 
     def save_ckpt(self, checkpoint_dir, ckpt_name, step):
         """
@@ -1066,42 +1401,598 @@ class MODEL(object):
         #dataset_path = "/home/ubuntu/dataset/SuperResolution/DIV2K/"
 
         if type == "train":
+
             sub_path = "DIV2K_train"
 
+            lr_subpath = []
+            lr_imgs = []
 
             if lrtype == 'bicubic':
-                lr_subpath = sub_path + "_LR_bicubic/" + "X" + str(self.scale)
+                lr_subpath.append(sub_path + "_LR_bicubic/" + "X" + str(self.scale))
+            elif lrtype == 'unknown':
+                lr_subpath.append(sub_path + "_LR_unknown/" + "X" + str(self.scale))
+            elif lrtype == 'all':
+                lr_subpath.append(sub_path + "_LR_bicubic/" + "X" + str(self.scale))
+                lr_subpath.append(sub_path + "_LR_unknown/" + "X" + str(self.scale))
             else:
-                lr_subpath = sub_path + "_LR_unkown/" + "X" + str(self.scale)
-            LR_path = os.path.join(dataset_path, lr_subpath)
+                #print("lrtype error: [{}]".format(lrtype))
+                return  0
+
             HR_path = os.path.join(dataset_path, sub_path + "_HR")
-
             hr_imgs = os.listdir(HR_path)
-            lr_imgs = [os.path.join(LR_path,hr_imgs[i].split(".")[0] + 'x' + str(self.scale)+'.' + hr_imgs[i].split(".")[1]) for i in range(len(hr_imgs))]
             hr_imgs = [os.path.join(HR_path, hr_imgs[i]) for i in range(len(hr_imgs))]
-        
 
-        if type == "test":
+            for path_idx in range(len(lr_subpath)):
+                LR_path = os.path.join(dataset_path, lr_subpath[path_idx])
+                file_name = [os.path.basename(hr_imgs[i]) for i in range(len(hr_imgs))]
+                lr_imgs.append([os.path.join(LR_path, file_name[i].split(".")[0] + 'x' + str(self.scale)+'.' + file_name[i].split(".")[1]) for i in range(len(hr_imgs))])
+            
+
+
+        elif type == "test":
+
             lr_imgs = []
-            hr_imgs = []
             images = os.listdir(dataset_path)
-            for i in range(len(images)//2):
-                lr_imgs.append(os.path.join(dataset_path, "img_00"+str(i+1)+"_SRF_" + str(self.scale)+"_LR.png"))
-                hr_imgs.append(os.path.join(dataset_path, "img_00"+str(i+1)+"_SRF_"+ str(self.scale)+"_HR.png"))
+            #for i in range(len(images)//2):
+            lr_imgs.append([os.path.join(dataset_path, "img_"+str(i+1)+"_SRF_" + str(self.scale)+"_LR.png") for i in range(len(images)//2)])
+            hr_imgs = ([os.path.join(dataset_path, "img_"+str(i+1)+"_SRF_"+ str(self.scale)+"_HR.png")  for i in range(len(images)//2)])
         
            
         hr_list = []
         lr_list = []
-
+        lr_list2 = []
 
 
         for i in range(len(hr_imgs)):
 
-            sys.stdout.write("Load data:{}/{}".format(i,len(hr_imgs))+'\r')
-            sys.stdout.flush()
-             
-            hr_list.append(misc.imread(hr_imgs[i]))
-            lr_list.append(misc.imread(lr_imgs[i]))
+           sys.stdout.write("Load data:{}/{}".format(i,len(hr_imgs))+'\r')
+           sys.stdout.flush()
+           hr_list.append(misc.imread(hr_imgs[i]))            
+           lr_list.append(misc.imread(lr_imgs[0][i]))
+           if lrtype == 'all':
+            lr_list2.append(misc.imread(lr_imgs[1][i]))
 
+        print("[load_divk] type: [{}], lrtype: [{}]".format(type, lrtype))
+        print("[load_divk] HR images number: [{}]".format(len(hr_list)))
+        print("[load_divk] LR bicubic images number: [{}]".format(len(lr_list)))
+
+        if lrtype == 'all':
+            print("[load_divk] LR unknown images number: [{}]".format(len(lr_list2)))
             
-        return list(zip(lr_list, hr_list))
+        if lrtype == 'all':
+            return list(zip(lr_list + lr_list2, hr_list + hr_list))
+        else:
+            return list(zip(lr_list, hr_list))
+
+
+    def build_edsr_local_att_v1(self):###
+        """
+        Build SRCNN model
+        """        
+        # Define input and label images
+        self.input = tf.placeholder(tf.float32, [None, self.image_size, self.image_size, self.color_dim], name='images')
+        self.image_target = tf.placeholder(tf.float32, [None, None, None, self.color_dim], name='labels')
+        self.dropout = tf.placeholder(tf.float32, name='dropout')
+        self.lr = tf.placeholder(tf.float32, name='learning_rate')
+        
+        """
+        mean_x = tf.reduce_mean(self.input)
+        image_input  = self.input - mean_x
+        mean_y = tf.reduce_mean(self.image_target)
+        target = self.image_target - mean_y
+        """
+        self.image_input = self.input/255.
+        self.target = target = self.image_target/255.
+        
+        # Initial model_zoo
+        mz = model_zoo.model_zoo(self.image_input, self.dropout, self.is_train, self.model_ticket)
+        
+        # Build model
+        logits2, logits4 = mz.build_model({"scale":self.scale,"feature_size" :64})
+
+        lap_logit2 = laplacian_filter(logits2)
+        lap_logit4 = laplacian_filter(logits4)
+
+        self.l1_loss2 = tf.reduce_mean(tf.losses.absolute_difference(target,logits2))
+        self.l1_loss4 = tf.reduce_mean(tf.losses.absolute_difference(target,logits4))
+  
+        self.train_op2 = tf.train.AdamOptimizer(self.lr).minimize(self.l1_loss2)
+        self.train_op4 = tf.train.AdamOptimizer(self.lr).minimize(self.l1_loss4)
+
+        if self.scale == 2:
+
+            self.logits = logits2
+            self.l1_loss = self.l1_loss2
+            self.train_op = self.train_op2
+        
+        elif self.scale == 4:
+
+            self.logits = logits4
+            self.l1_loss = self.l1_loss4
+            self.train_op = self.train_op4
+
+        mse = tf.reduce_mean(tf.squared_difference(target*255.,self.logits*255.))    
+        PSNR = tf.constant(255**2,dtype=tf.float32)/mse
+        PSNR = tf.constant(10,dtype=tf.float32)*log10(PSNR)
+
+        
+        with tf.name_scope('train_summary'):
+            tf.summary.scalar("loss", self.l1_loss, collections=['train'])
+            tf.summary.scalar("MSE", mse, collections=['train'])
+            tf.summary.scalar("PSNR",PSNR, collections=['train'])
+            tf.summary.image("input_image",self.input , collections=['train'])
+            tf.summary.image("target_image",target*255, collections=['train'])
+            tf.summary.image("output_image",self.logits*255, collections=['train'])
+            tf.summary.scalar("lap2",lap_logit2, collections=['train'])
+            
+            self.merged_summary_train = tf.summary.merge_all('train')          
+            
+        with tf.name_scope('test_summary'):
+            tf.summary.scalar("loss", self.l1_loss, collections=['test'])
+            tf.summary.scalar("PSNR",PSNR,  collections=['test'])
+            tf.summary.scalar("MSE", mse, collections=['test'])
+            tf.summary.image("input_image",self.input, collections=['test'])
+            tf.summary.image("target_image",target*255 , collections=['test'])
+            tf.summary.image("output_image",self.logits*255, collections=['test'])
+
+            self.merged_summary_test = tf.summary.merge_all('test')                 
+        
+        self.saver = tf.train.Saver()
+
+        
+    def train_edsr_local_att_v1(self):
+        """
+        Training process.
+        """     
+        print("Training...")
+
+        # Define dataset path
+
+    
+        test_dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/Set5/preprocessed_scale_"+str(self.scale),type="test")
+        dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/DIV2K/")
+
+        log_dir = os.path.join(self.log_dir, self.ckpt_name, "log")
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+        summary_writer = tf.summary.FileWriter(log_dir, self.sess.graph)    
+    
+        self.sess.run(tf.global_variables_initializer())
+
+        if self.load_ckpt(self.checkpoint_dir, self.ckpt_name):
+            print(" [*] Load SUCCESS")
+        else:
+            print(" [!] Load failed...")
+
+        
+       
+        # Define iteration counter, timer and average loss
+        itera_counter = 0
+        learning_rate = 1e-4
+        #train_batch_num = len(train_data) // self.batch_size
+
+        epoch_pbar = tqdm(range(self.epoch))
+        for ep in epoch_pbar:            
+            # Run by batch images
+            random.shuffle(dataset) 
+            train_data, train_label  = zip(*dataset)
+            test_data, test_label  = zip(*test_dataset)
+
+            epoch_pbar.set_description("Epoch: [%2d], lr:%f" % ((ep+1), learning_rate))
+            epoch_pbar.refresh()
+        
+            batch_pbar = tqdm(range(0, len(train_data)//self.batch_size), desc="Batch: [0]")
+            
+           
+            if ep%4000 == 0 and ep != 0:learning_rate = learning_rate/2
+
+            for idx in batch_pbar:                
+                        
+                itera_counter += 1
+                batch_index = idx*self.batch_size 
+                batch_images, batch_labels = batch_shuffle_rndc(train_data, train_label, self.scale, self.image_size,batch_index, self.batch_size)
+                
+                
+                #print(batch_images, batch_labels)
+                
+                # Run the model
+                _, train_loss = self.sess.run([self.train_op, self.l1_loss],
+                                                                             feed_dict={self.input: batch_images, 
+                                                                                        self.image_target: batch_labels,
+                                                                                        self.dropout: 1.,
+                                                                                        self.lr:learning_rate})
+                                                           
+                
+                batch_pbar.set_description("Batch: [%2d], L1:%.2f" % (idx+1, train_loss))
+                #batch_pbar.refresh()
+              
+            if ep % 50 == 0:
+                self.save_ckpt(self.checkpoint_dir, self.ckpt_name, itera_counter)
+                
+                train_sum, train_loss = self.sess.run([self.merged_summary_train, self.l1_loss], 
+                                                                                                feed_dict={
+                                                                                                    self.input: batch_images, 
+                                                                                                    self.image_target: batch_labels,
+                                                                                                    self.dropout: 1.
+                                                                                                                   })
+                batch_test_images, batch_test_labels = batch_shuffle_rndc(test_data, test_label, self.scale, self.image_size, 0, 5)
+                test_sum, test_loss = self.sess.run([self.merged_summary_test, self.l1_loss], 
+                                                                                                feed_dict={
+                                                                                                    self.input: batch_test_images, 
+                                                                                                    self.image_target: batch_test_labels,
+                                                                                                    self.dropout: 1.})
+                                                                                                                       
+
+               
+                    
+                print("Epoch: [{}], Train_loss: {}".format((ep+1), train_loss))     
+                print("Epoch: [{}], Test_loss: {}".format((ep+1), test_loss))  
+                
+                
+                summary_writer.add_summary(train_sum, ep)
+                summary_writer.add_summary(test_sum, ep)
+
+
+    def build_edsr_local_att_v2_upsample(self):###
+        """
+        Build SRCNN model
+        """        
+        # Define input and label images
+        """
+        Build SRCNN model
+        """        
+        # Define input and label images
+        self.input = tf.placeholder(tf.float32, [None, self.image_size, self.image_size, self.color_dim], name='images')
+        self.image_target = tf.placeholder(tf.float32, [None, None, None, self.color_dim], name='labels')
+        self.dropout = tf.placeholder(tf.float32, name='dropout')
+        self.lr = tf.placeholder(tf.float32, name='learning_rate')
+     
+        self.image_input = self.input/255.
+        self.target = target = self.image_target/255.
+        
+        # Initial model_zoo
+        mz = model_zoo.model_zoo(self.image_input, self.dropout, self.is_train, self.model_ticket)
+        
+        # Build model
+        logits2, logits4 = mz.build_model({"scale":self.scale,"feature_size" :64, "kernel_size":3})
+
+        def regional_l1loss(target, logits):
+
+            bsize, a, b, c = logits.get_shape().as_list()
+
+            logits = tf.reshape(logits,(tf.shape(logits)[0],16,a//16,16,b//16,c))
+            target = tf.reshape(target,(tf.shape(logits)[0],16,a//16,16,b//16,c))
+            
+            logits_loss = tf.abs(target - logits)       
+            logits_loss = tf.reduce_sum(logits_loss, axis=[1,3])
+            logits_loss = logits_loss/256.
+            logits_loss = tf.reduce_sum(logits_loss)
+
+            return logits_loss
+
+        #self.l1_loss2 = tf.reduce_mean(tf.losses.absolute_difference(target,logits2))
+        #self.l1_loss4 = tf.reduce_mean(tf.losses.absolute_difference(target,logits4))
+        self.l1_loss2 = regional_l1loss(target,logits2)
+        self.l1_loss4 = regional_l1loss(target,logits4)
+  
+        self.train_op2 = tf.train.AdamOptimizer(self.lr).minimize(self.l1_loss2)
+        self.train_op4 = tf.train.AdamOptimizer(self.lr).minimize(self.l1_loss4)
+
+        if self.scale == 2:
+
+            self.logits = logits2
+            self.l1_loss = self.l1_loss2
+            self.train_op = self.train_op2
+        
+        elif self.scale == 4:
+
+            self.logits = logits4
+            self.l1_loss = self.l1_loss4
+            self.train_op = self.train_op4
+
+        mse = tf.reduce_mean(tf.squared_difference(target*255.,self.logits*255.))    
+        PSNR = tf.constant(255**2,dtype=tf.float32)/mse
+        PSNR = tf.constant(10,dtype=tf.float32)*log10(PSNR)
+
+        
+        with tf.name_scope('train_summary'):
+            tf.summary.scalar("loss", self.l1_loss, collections=['train'])
+            tf.summary.scalar("MSE", mse, collections=['train'])
+            tf.summary.scalar("PSNR",PSNR, collections=['train'])
+            tf.summary.image("input_image",self.input , collections=['train'])
+            tf.summary.image("target_image",target*255, collections=['train'])
+            tf.summary.image("output_image",self.logits*255, collections=['train'])
+            
+            self.merged_summary_train = tf.summary.merge_all('train')          
+            
+        with tf.name_scope('test_summary'):
+            tf.summary.scalar("loss", self.l1_loss, collections=['test'])
+            tf.summary.scalar("PSNR",PSNR,  collections=['test'])
+            tf.summary.scalar("MSE", mse, collections=['test'])
+            tf.summary.image("input_image",self.input, collections=['test'])
+            tf.summary.image("target_image",target*255 , collections=['test'])
+            tf.summary.image("output_image",self.logits*255, collections=['test'])
+
+            self.merged_summary_test = tf.summary.merge_all('test')                 
+        
+        self.saver = tf.train.Saver()
+
+        
+    def train_edsr_local_att_v2_upsample(self):
+        """
+        Training process.
+        """     
+        print("Training...")
+
+        # Define dataset path
+
+        print("/home/ubuntu/dataset/SuperResolution/Set5/validation_scale_"+str(self.scale)+"/")
+        test_dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/Set5/validation_scale_"+str(self.scale)+"/",type="test")
+        dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/DIV2K/",lrtype="all", type="train")
+
+        log_dir = os.path.join(self.log_dir, self.ckpt_name, "log")
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+        summary_writer = tf.summary.FileWriter(log_dir, self.sess.graph)    
+    
+        self.sess.run(tf.global_variables_initializer())
+
+        if self.load_ckpt(self.checkpoint_dir, self.ckpt_name):
+            print(" [*] Load SUCCESS")
+        else:
+            print(" [!] Load failed...")
+
+        
+       
+        # Define iteration counter, timer and average loss
+        itera_counter = 0
+        learning_rate = 1e-4
+        #train_batch_num = len(train_data) // self.batch_size
+
+        epoch_pbar = tqdm(range(5745, self.epoch))
+        for ep in epoch_pbar:            
+            # Run by batch images
+            random.shuffle(dataset) 
+            train_data, train_label  = zip(*dataset)
+            test_data, test_label  = zip(*test_dataset)
+
+            epoch_pbar.set_description("Epoch: [%2d], lr:%f" % ((ep+1), learning_rate))
+            epoch_pbar.refresh()
+        
+            batch_pbar = tqdm(range(0, len(train_data)//self.batch_size), desc="Batch: [0]")
+            
+           
+            if ep%4000 == 0 and ep != 0:learning_rate = learning_rate/2
+
+            for idx in batch_pbar:                
+                        
+                itera_counter += 1
+                batch_index = idx*self.batch_size 
+                batch_images, batch_labels = batch_shuffle_rndc(train_data, train_label, self.scale, self.image_size,batch_index, self.batch_size)
+                
+                
+                #print(batch_images, batch_labels)
+                
+                # Run the model
+                _, train_loss = self.sess.run([self.train_op, self.l1_loss],
+                                                                             feed_dict={self.input: batch_images, 
+                                                                                        self.image_target: batch_labels,
+                                                                                        self.dropout: 1.,
+                                                                                        self.lr:learning_rate})
+                                                           
+                
+                batch_pbar.set_description("Batch: [%2d], L1:%.2f" % (idx+1, train_loss))
+                #batch_pbar.refresh()
+              
+            if ep % 50 == 0:
+                self.save_ckpt(self.checkpoint_dir, self.ckpt_name, itera_counter)
+                
+                train_sum, train_loss = self.sess.run([self.merged_summary_train, self.l1_loss], 
+                                                                                                feed_dict={
+                                                                                                    self.input: batch_images, 
+                                                                                                    self.image_target: batch_labels,
+                                                                                                    self.dropout: 1.
+                                                                                                                   })
+                #batch_test_images, batch_test_labels = batch_shuffle_rndc(test_data, test_label, self.scale, self.image_size, 0, 5)
+                test_sum, test_loss = self.sess.run([self.merged_summary_test, self.l1_loss], 
+                                                                                                feed_dict={
+                                                                                                    self.input: test_data, 
+                                                                                                    self.image_target: test_label,
+                                                                                                    self.dropout: 1.})
+                                                                                                                       
+
+               
+                    
+                print("Epoch: [{}], Train_loss: {}".format((ep+1), train_loss))     
+                print("Epoch: [{}], Test_loss: {}".format((ep+1), test_loss))  
+                
+                
+                summary_writer.add_summary(train_sum, ep)
+                summary_writer.add_summary(test_sum, ep)
+
+
+    def build_edsr_attention_v2(self):###
+        """
+        Build SRCNN model
+        """        
+        # Define input and label images
+        """
+        Build SRCNN model
+        """        
+        # Define input and label images
+        self.input = tf.placeholder(tf.float32, [None, self.image_size, self.image_size, self.color_dim], name='images')
+        self.image_target = tf.placeholder(tf.float32, [None, None, None, self.color_dim], name='labels')
+        self.dropout = tf.placeholder(tf.float32, name='dropout')
+        self.lr = tf.placeholder(tf.float32, name='learning_rate')
+     
+        self.image_input = self.input/255.
+        self.target = target = self.image_target/255.
+        
+        # Initial model_zoo
+        mz = model_zoo.model_zoo(self.image_input, self.dropout, self.is_train, self.model_ticket)
+        
+        # Build model
+        logits2, logits4 = mz.build_model({"scale":self.scale,"feature_size" :64, "kernel_size":3})
+
+        def regional_l1loss(target, logits):
+
+            bsize, a, b, c = logits.get_shape().as_list()
+
+            center_logits = tf.slice(logits, [0,7,7,0],[-1, 8, 8, c])
+            center_target = tf.slice(target, [0,7,7,0],[-1, 8, 8, c])
+
+            bsize, a, b, c = center_logits.get_shape().as_list()
+
+            #logits = tf.reshape(center_logits,(tf.shape(center_logits)[0],8,a//8,8,b//8,c))
+            #target = tf.reshape(center_target,(tf.shape(center_target)[0],8,a//8,8,b//8,c))
+            #print(logits)
+
+            logits = center_logits
+            target = center_target
+            
+            logits_loss = tf.abs(target - logits)       
+            logits_loss = tf.reduce_sum(logits_loss, axis=[1,3])
+            logits_loss = logits_loss/64.
+            logits_loss = tf.reduce_sum(logits_loss)
+
+            return logits_loss
+
+        #self.l1_loss2 = tf.reduce_mean(tf.losses.absolute_difference(target,logits2))
+        #self.l1_loss4 = tf.reduce_mean(tf.losses.absolute_difference(target,logits4))
+        self.l1_loss2 = regional_l1loss(target,logits2)
+        self.l1_loss4 = regional_l1loss(target,logits4)
+
+        self.train_op2 = tf.train.AdamOptimizer(self.lr).minimize(self.l1_loss2)
+        self.train_op4 = tf.train.AdamOptimizer(self.lr).minimize(self.l1_loss4)
+
+        if self.scale == 2:
+
+            self.logits = logits2
+            self.l1_loss = self.l1_loss2
+            self.train_op = self.train_op2
+        
+        elif self.scale == 4:
+
+            self.logits = logits4
+            self.l1_loss = self.l1_loss4
+            self.train_op = self.train_op4
+
+        mse = tf.reduce_mean(tf.squared_difference(target*255.,self.logits*255.))    
+        PSNR = tf.constant(255**2,dtype=tf.float32)/mse
+        PSNR = tf.constant(10,dtype=tf.float32)*log10(PSNR)
+
+        
+        with tf.name_scope('train_summary'):
+            tf.summary.scalar("loss", self.l1_loss, collections=['train'])
+            tf.summary.scalar("MSE", mse, collections=['train'])
+            tf.summary.scalar("PSNR",PSNR, collections=['train'])
+            tf.summary.image("input_image",self.input , collections=['train'])
+            tf.summary.image("target_image",target*255, collections=['train'])
+            tf.summary.image("output_image",self.logits*255, collections=['train'])
+            
+            self.merged_summary_train = tf.summary.merge_all('train')          
+            
+        with tf.name_scope('test_summary'):
+            tf.summary.scalar("loss", self.l1_loss, collections=['test'])
+            tf.summary.scalar("PSNR",PSNR,  collections=['test'])
+            tf.summary.scalar("MSE", mse, collections=['test'])
+            tf.summary.image("input_image",self.input, collections=['test'])
+            tf.summary.image("target_image",target*255 , collections=['test'])
+            tf.summary.image("output_image",self.logits*255, collections=['test'])
+
+            self.merged_summary_test = tf.summary.merge_all('test')                 
+        
+        self.saver = tf.train.Saver()
+
+        
+    def train_edsr_attention_v2(self):
+        """
+        Training process.
+        """     
+        print("Training...")
+
+        # Define dataset path
+
+        print("/home/ubuntu/dataset/SuperResolution/Set5/validation_scale_"+str(self.scale)+"/")
+        test_dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/Set5/validation_24_scale_"+str(self.scale)+"/",type="test")
+        dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/DIV2K/",lrtype="all", type="train")
+
+        log_dir = os.path.join(self.log_dir, self.ckpt_name, "log")
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+        summary_writer = tf.summary.FileWriter(log_dir, self.sess.graph)    
+    
+        self.sess.run(tf.global_variables_initializer())
+
+        if self.load_ckpt(self.checkpoint_dir, self.ckpt_name):
+            print(" [*] Load SUCCESS")
+        else:
+            print(" [!] Load failed...")
+
+        
+       
+        # Define iteration counter, timer and average loss
+        itera_counter = 0
+        learning_rate = 1e-4
+        #train_batch_num = len(train_data) // self.batch_size
+
+        epoch_pbar = tqdm(range(self.epoch))
+        for ep in epoch_pbar:            
+            # Run by batch images
+            random.shuffle(dataset) 
+            train_data, train_label  = zip(*dataset)
+            test_data, test_label  = zip(*test_dataset)
+
+            epoch_pbar.set_description("Epoch: [%2d], lr:%f" % ((ep+1), learning_rate))
+            epoch_pbar.refresh()
+        
+            batch_pbar = tqdm(range(0, len(train_data)//self.batch_size), desc="Batch: [0]")
+            
+           
+            if ep%4000 == 0 and ep != 0:learning_rate = learning_rate/2
+
+            for idx in batch_pbar:                
+                        
+                itera_counter += 1
+                batch_index = idx*self.batch_size 
+                batch_images, batch_labels = batch_shuffle_rndc(train_data, train_label, self.scale, self.image_size,batch_index, self.batch_size)
+                
+                
+                #print(batch_images, batch_labels)
+                
+                # Run the model
+                _, train_loss = self.sess.run([self.train_op, self.l1_loss],
+                                                                             feed_dict={self.input: batch_images, 
+                                                                                        self.image_target: batch_labels,
+                                                                                        self.dropout: 1.,
+                                                                                        self.lr:learning_rate})
+                                                           
+                
+                batch_pbar.set_description("Batch: [%2d], L1:%.2f" % (idx+1, train_loss))
+                #batch_pbar.refresh()
+              
+            if ep % 50 == 0:
+                self.save_ckpt(self.checkpoint_dir, self.ckpt_name, itera_counter)
+                
+                train_sum, train_loss = self.sess.run([self.merged_summary_train, self.l1_loss], 
+                                                                                                feed_dict={
+                                                                                                    self.input: batch_images, 
+                                                                                                    self.image_target: batch_labels,
+                                                                                                    self.dropout: 1.
+                                                                                                                   })
+                #batch_test_images, batch_test_labels = batch_shuffle_rndc(test_data, test_label, self.scale, self.image_size, 0, 5)
+                test_sum, test_loss = self.sess.run([self.merged_summary_test, self.l1_loss], 
+                                                                                                feed_dict={
+                                                                                                    self.input: test_data, 
+                                                                                                    self.image_target: test_label,
+                                                                                                    self.dropout: 1.})
+                                                                                                                       
+
+               
+                    
+                print("Epoch: [{}], Train_loss: {}".format((ep+1), train_loss))     
+                print("Epoch: [{}], Test_loss: {}".format((ep+1), test_loss))  
+                
+                
+                summary_writer.add_summary(train_sum, ep)
+                summary_writer.add_summary(test_sum, ep)

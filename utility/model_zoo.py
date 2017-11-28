@@ -323,10 +323,11 @@ class model_zoo:
         """
         return network
 
+    
     def edsr_v2(self, kwargs):
 
         scale = kwargs["scale"]
-        feature_size = kwargs["feature_size"]
+        feature_size = 64
         scaling_factor = 1
         num_resblock = 16
             
@@ -349,14 +350,199 @@ class model_zoo:
                     x += conv_1
 
             with tf.name_scope("upsamplex2"):
-                    upsample2 = nf.upsample(x, 2, feature_size, True,None)
+                    upsample2 = nf.upsample(x, 2, feature_size, 3,None)
+                    network = nf.convolution_layer(upsample2, model_params["conv3"], [1,1,1,1], name="conv3", activat_fn=None)
+           
+            with tf.name_scope("upsamplex4"):
+                    upsample4 = nf.upsample(upsample2, 2, feature_size, 3,None)
+                    network2 = nf.convolution_layer(upsample4, model_params["conv3"], [1,1,1,1], name="conv4", activat_fn=None)
+                    
+            
+        return [network, network2]
+
+
+    def attention_network(self, image_input, scale, layers, channels ,dropout, is_training):
+
+        with tf.variable_scope("attention"):
+                    
+                    att_net = nf.convolution_layer(image_input, [3,3,64], [1,2,2,1],name="conv1-1")
+                    att_net = nf.convolution_layer(att_net, [3,3,64], [1,1,1,1],name="conv1-2")
+                    att_net = tf.nn.max_pool(att_net, ksize=[1, 3, 3, 1],strides=[1, 2, 2, 1], padding='SAME')
+                    att_net = nf.convolution_layer(att_net, [3,3,64], [1,1,1,1],name="conv2-1")
+                    #att_net = nf.convolution_layer(att_net, [3,3,128], [1,1,1,1],name="conv2-2")
+                    att_net = tf.nn.max_pool(att_net, ksize=[1, 3, 3, 1],strides=[1, 2, 2, 1], padding='SAME')
+                    att_net = nf.convolution_layer(att_net, [3,3,64], [1,1,1,1],name="conv3-1")
+                    #att_net = nf.convolution_layer(att_net, [3,3,256], [1,1,1,1],name="conv3-2")
+                    att_net = tf.nn.max_pool(att_net, ksize=[1, 3, 3, 1],strides=[1, 2, 2, 1], padding='SAME')
+                    att_net = nf.convolution_layer(att_net, [3,3,64], [1,1,1,1],name="conv4-1")
+                    #att_net = nf.convolution_layer(att_net, [3,3,512], [1,1,1,1],name="conv4-2")
+                    att_net = tf.nn.max_pool(att_net, ksize=[1, 3, 3, 1],strides=[1, 2, 2, 1], padding='SAME')
+                    att_net = tf.reshape(att_net, [-1, int(np.prod(att_net.get_shape()[1:]))]) 
+                    att_net = nf.fc_layer(att_net, 2048, name="fc1")
+                    att_net = nf.fc_layer(att_net, 2048, name="fc2")
+                    att_net = tf.layers.dropout(att_net, rate=dropout, training=is_training, name='dropout1')
+                    logits = nf.fc_layer(att_net, channels*(scale**2)*layers, name="logits", activat_fn=None)
+                    
+                    bsize = tf.shape(logits)[0]
+                    logits = tf.reshape(logits, (bsize,1,1,channels*(scale**2), layers))
+                    weighting = tf.nn.softmax(logits)
+                    
+                    """
+                    max_index = tf.argmax(tf.nn.softmax(logits),4) 
+                    weighting = tf.one_hot(max_index, 
+                                        depth=layers, 
+                                        on_value=1.0,
+                                        axis = -1)
+                    """
+                  
+
+        return weighting
+
+    def edsr_1X1_v1(self, kwargs):
+
+        scale = kwargs["scale"]
+        feature_size = kwargs["feature_size"]
+        dropout = kwargs["dropout"]
+        is_training = kwargs["is_training"]
+
+        scaling_factor = 1
+        num_resblock = 16
+        att_layers = 15
+            
+        model_params = {
+
+                        'conv1': [3,3,feature_size],
+                        'resblock': [3,3,feature_size],
+                        'conv2': [3,3,feature_size],
+                        'conv3': [3,3,3],
+                        'conv4': [3,3,3*att_layers],
+                        'conv5': [3,3,3*att_layers]
+                        }
+
+        with tf.name_scope("attention_x2"):
+                att_weight_x2 = self.attention_network(self.inputs, 1, att_layers,3, dropout, is_training)
+        with tf.name_scope("attention_x4"):
+                att_weight_x4 = self.attention_network(self.inputs, 1, att_layers,3, dropout, is_training)
+
+        with tf.name_scope("EDSR_v1"):     
+            x = nf.convolution_layer(self.inputs, model_params["conv1"], [1,1,1,1], name="conv1")
+            conv_1 = x
+            with tf.name_scope("resblock"): 
+            
+                    #Add the residual blocks to the model
+                    for i in range(num_resblock):
+                        x = nf.resBlock(x,feature_size,scale=scaling_factor)
+                    x = nf.convolution_layer(x, model_params["conv2"], [1,1,1,1], name="conv2")
+                    x += conv_1
+
+            with tf.name_scope("upsamplex2"):
+                    upsample2 = nf.upsample(x, 2, feature_size, 3,None)
+                    network = nf.convolution_layer(upsample2, model_params["conv3"], [1,1,1,1], name="conv3_1", activat_fn=None)
+                    network = nf.convolution_layer(network, model_params["conv4"], [1,1,1,1], name="conv3_2", activat_fn=None)
+                    network = nf.convolution_layer(network, model_params["conv5"], [1,1,1,1], name="conv3_3", activat_fn=None)
+
+                    netshape = tf.shape(network)
+                    network = tf.reshape(network, (netshape[0],netshape[1],netshape[2],3, att_layers))
+                    network = tf.multiply(network, att_weight_x2)
+                    network = tf.reduce_sum(network,4) 
+
+            with tf.name_scope("upsamplex4"):
+                    upsample4 = nf.upsample(upsample2, 2, feature_size, 3,None)
+                    network2 = nf.convolution_layer(upsample4, model_params["conv3"], [1,1,1,1], name="conv4_1", activat_fn=None)
+                    network2 = nf.convolution_layer(network2, model_params["conv4"], [1,1,1,1], name="conv4_2", activat_fn=None)
+                    network2 = nf.convolution_layer(network2, model_params["conv5"], [1,1,1,1], name="conv4_3", activat_fn=None)
+                    
+                    netshape = tf.shape(network2)
+                    network2 = tf.reshape(network2, (netshape[0],netshape[1],netshape[2],3, att_layers))
+                    network2 = tf.multiply(network2, att_weight_x2)
+                    network2 = tf.reduce_sum(network2,4) 
+
+        return [network, network2]
+
+    def edsr_attention_v1(self, kwargs):
+
+
+        def attention_network(image_input, scale, layers, channels ,dropout, is_training):
+
+            with tf.variable_scope("attention"):
+                    
+                    att_net = nf.convolution_layer(image_input, [3,3,64], [1,2,2,1],name="conv1-1")
+                    att_net = nf.convolution_layer(att_net, [3,3,64], [1,1,1,1],name="conv1-2")
+                    att_net = tf.nn.max_pool(att_net, ksize=[1, 3, 3, 1],strides=[1, 2, 2, 1], padding='SAME')
+                    att_net = nf.convolution_layer(att_net, [3,3,128], [1,1,1,1],name="conv2-1")
+                    att_net = nf.convolution_layer(att_net, [3,3,128], [1,1,1,1],name="conv2-2")
+                    att_net = tf.nn.max_pool(att_net, ksize=[1, 3, 3, 1],strides=[1, 2, 2, 1], padding='SAME')
+                    att_net = nf.convolution_layer(att_net, [3,3,256], [1,1,1,1],name="conv3-1")
+                    att_net = nf.convolution_layer(att_net, [3,3,256], [1,1,1,1],name="conv3-2")
+                    att_net = tf.nn.max_pool(att_net, ksize=[1, 3, 3, 1],strides=[1, 2, 2, 1], padding='SAME')
+                    att_net = nf.convolution_layer(att_net, [3,3,512], [1,1,1,1],name="conv4-1")
+                    #att_net = nf.convolution_layer(att_net, [3,3,512], [1,1,1,1],name="conv4-2")
+                    att_net = tf.nn.max_pool(att_net, ksize=[1, 3, 3, 1],strides=[1, 2, 2, 1], padding='SAME')
+                    att_net = tf.reshape(att_net, [-1, int(np.prod(att_net.get_shape()[1:]))]) 
+                    att_net = nf.fc_layer(att_net, 2048, name="fc1")
+                    att_net = nf.fc_layer(att_net, 2048, name="fc2")
+                    att_net = tf.layers.dropout(att_net, rate=dropout, training=is_training, name='dropout1')
+                    logits = nf.fc_layer(att_net, channels*(scale**2)*layers, name="logits", activat_fn=None)
+                    
+                    bsize = tf.shape(logits)[0]
+                    logits = tf.reshape(logits, (bsize,1,1,channels*(scale**2), layers))
+                    weighting = tf.nn.softmax(logits)
+                    
+                    """
+                    max_index = tf.argmax(tf.nn.softmax(logits),4) 
+                    weighting = tf.one_hot(max_index, 
+                                        depth=layers, 
+                                        on_value=1.0,
+                                        axis = -1)
+                    """
+                  
+
+            return weighting
+
+
+
+        scale = kwargs["scale"]
+        feature_size = kwargs["feature_size"]
+        dropout = kwargs["dropout"]
+        is_training = kwargs["is_training"]
+
+        scaling_factor = 1
+        num_resblock = 16
+        att_layers = 15
+            
+        model_params = {
+
+                        'conv1': [3,3,feature_size],
+                        'resblock': [3,3,feature_size],
+                        'conv2': [3,3,feature_size],
+                        'conv3': [3,3,3]
+                        }
+
+        with tf.name_scope("attention_x2"):
+                arr = att_weight_x2 = attention_network(self.inputs, scale, att_layers,3, dropout, is_training)
+        with tf.name_scope("attention_x4"):
+                att_weight_x4 = attention_network(self.inputs, scale, att_layers,3, dropout, is_training)
+
+        with tf.name_scope("EDSR_v1"):     
+            x = nf.convolution_layer(self.inputs, model_params["conv1"], [1,1,1,1], name="conv1")
+            conv_1 = x
+            with tf.name_scope("resblock"): 
+            
+                    #Add the residual blocks to the model
+                    for i in range(num_resblock):
+                        x = nf.resBlock(x,feature_size,scale=scaling_factor)
+                    x = nf.convolution_layer(x, model_params["conv2"], [1,1,1,1], name="conv2")
+                    x += conv_1
+        
+            with tf.name_scope("upsamplex2"):
+                    upsample2 = nf.upsample_attention(x, att_weight_x2, 2, feature_size, channels = 3,  attentions = att_layers, activation=None)
                     network = nf.convolution_layer(upsample2, model_params["conv3"], [1,1,1,1], name="conv3", activat_fn=None)
 
             with tf.name_scope("upsamplex4"):
-                    upsample4 = nf.upsample(upsample2, 2, feature_size, True,None)
+                    upsample4 = nf.upsample_attention(upsample2, att_weight_x4, 2, feature_size, channels = 3,  attentions = att_layers, activation=None)
                     network2 = nf.convolution_layer(upsample4, model_params["conv3"], [1,1,1,1], name="conv4", activat_fn=None)
        
-        return [network, network2]
+        return [network, network2, att_weight_x2]
 
 
     def espcn_v1(self):
@@ -380,16 +566,266 @@ class model_zoo:
         return netowrk
 
 
+    def edsr_local_att_v1(self, kwargs):
+
+
+        scale = kwargs["scale"]
+        feature_size = 256
+        scaling_factor = 1
+        num_resblock = 16
+        att_layers = 15
+
+        def local_attention(scope_name, inputs, scale, channels = 3,att_layers = att_layers):
+
+            with tf.variable_scope(scope_name):
+                        
+            
+                att_net = nf.convolution_layer(inputs, [3,3,64], [1,1,1,1],name="conv1-1")
+                att_net = nf.convolution_layer(att_net, [3,3,64], [1,1,1,1],name="conv1-2")
+                #att_net = tf.nn.max_pool(att_net, ksize=[1, 3, 3, 1],strides=[1, 2, 2, 1], padding='SAME')
+                att_net = nf.convolution_layer(att_net, [3,3,64], [1,1,1,1],name="conv2-1")
+                att_net = nf.convolution_layer(att_net, [3,3,128], [1,1,1,1],name="conv3-1")
+                att_net = nf.convolution_layer(att_net, [3,3,512], [1,1,1,1],name="conv4-1")
+                #att_net = tf.nn.max_pool(att_net, ksize=[1, 3, 3, 1],strides=[1, 2, 2, 1], padding='SAME')
+                att_net = nf.convolution_layer(att_net, [3,3,channels*(scale**2)*att_layers], [1,1,1,1],name="conv5-1",activat_fn=None)
+
+                weighting = tf.reshape(att_net, (-1,24,1,24,1,channels*(scale**2), att_layers))
+                weighting = tf.nn.softmax(weighting)
+            
+                    
+            return weighting   
+            
+        model_params = {
+
+                        'conv1': [3,3,feature_size],
+                        'resblock': [1,1,feature_size],
+                        'conv2': [1,1,feature_size],
+                        'conv3': [1,1,3]
+                        }
+        with tf.name_scope("EDSR_v1"):     
+            x = nf.convolution_layer(self.inputs, model_params["conv1"], [1,1,1,1], name="conv1")
+            conv_1 = x
+            with tf.name_scope("resblock"): 
+            
+                    #Add the residual blocks to the model
+                    for i in range(num_resblock):
+                        x = nf.resBlock(x,feature_size,scale=scaling_factor)
+                    x = nf.convolution_layer(x, model_params["conv2"], [1,1,1,1], name="conv2")
+                    x += conv_1
+
+
+            with tf.name_scope("upsamplex2"):
+                    weight2 = local_attention("attention_2", self.inputs, 2)
+                    network = nf.upsample_local_attention(x, weight2, attentions = att_layers, activation=None)
+                    #network = nf.convolution_layer(upsample2, model_params["conv3"], [1,1,1,1], name="conv3", activat_fn=None)
+                    
+            with tf.name_scope("upsamplex4"):
+                    weight4 = local_attention("attention_4", network, 2)
+                    network2 = nf.upsample_local_attention(network, weight4, attentions = att_layers, activation=None)
+                    #network2 = nf.convolution_layer(upsample4, model_params["conv3"], [1,1,1,1], name="conv4", activat_fn=None)
+                   
+           
+        return [network, network2]
+
+
+
+    def edsr_attention_v2(self, kwargs):
+
+
+        scale = kwargs["scale"]
+        feature_size = 64
+        scaling_factor = 1
+        num_resblock = 16
+        att_layers = 30
+
+        def local_attention(scope_name, inputs, scale, channels = 3,att_layers = att_layers):
+            att_ksize = 8
+            num_resblock = 3       
+            bsize, a, b, c = inputs.get_shape().as_list()
+            model_params = {
+
+                        'conv1': [att_ksize,att_ksize,feature_size],
+                        'resblock': [att_ksize,att_ksize,feature_size],
+                        'conv2': [att_ksize,att_ksize,feature_size],
+                        'conv3': [att_ksize,att_ksize,feature_size],
+                        'att': [att_ksize,att_ksize,channels*(scale**2)*att_layers],
+                        }
+
+            with tf.variable_scope(scope_name):
+
+                x = nf.convolution_layer(inputs, model_params["conv1"], [1,1,1,1], name="conv1", activat_fn=None)
+                conv_1 = x
+                with tf.variable_scope("resblock"): 
+            
+                    #Add the residual blocks to the model
+                    for i in range(num_resblock):
+                        x = nf.resBlock(x,feature_size,scale=scaling_factor)
+                    x = nf.convolution_layer(x, model_params["conv2"], [1,1,1,1], name="conv2", activat_fn=None)
+                    x += conv_1
+
+                att_net = nf.convolution_layer(x, model_params['att'], [1,1,1,1],name="att", activat_fn=None)
+                weighting = tf.reshape(att_net, (-1,a,b,channels*(scale**2), att_layers))
+                weighting = tf.nn.softmax(weighting)
+
+            return weighting
+            
+        model_params = {
+
+                        'conv1': [3,3,feature_size],
+                        'resblock': [3,3,feature_size],
+                        'conv2': [3,3,feature_size],
+                        'conv3': [3,3,3]
+                        }
+        with tf.name_scope("EDSR_att_v2"):     
+            x = nf.convolution_layer(self.inputs, model_params["conv1"], [1,1,1,1], name="conv1", activat_fn=None)
+            conv_1 = x
+            with tf.name_scope("resblock"): 
+            
+                    #Add the residual blocks to the model
+                    for i in range(num_resblock):
+                        x = nf.resBlock(x,feature_size,scale=scaling_factor)
+                    x = nf.convolution_layer(x, model_params["conv2"], [1,1,1,1], name="conv2", activat_fn=None)
+                    x += conv_1
+
+
+            with tf.name_scope("upsamplex2"):
+                    weight2 = local_attention("attention_2", self.inputs, 2)
+                    network = nf.upsample_attention(x, weight2, attentions = att_layers, activation=None)
+                    #network = nf.convolution_layer(upsample2, model_params["conv3"], [1,1,1,1], name="conv3", activat_fn=None)
+                    
+            with tf.name_scope("upsamplex4"):
+                    weight4 = local_attention("attention_4", network, 2)
+                    network2 = nf.upsample_attention(network, weight4, attentions = att_layers, activation=None)
+                    #network2 = nf.convolution_layer(upsample4, model_params["conv3"], [1,1,1,1], name="conv4", activat_fn=None)
+                   
+           
+        return [network, network2]
+
+
+
+
+    def edsr_local_att_v2_upsample(self, kwargs):
+
+
+        scale = kwargs["scale"]
+        kernel_size = kwargs["kernel_size"]
+        feature_size = 64
+        scaling_factor = 1
+        num_resblock = 16
+        att_layers = 15
+        portion = 8
+
+        def local_attention(scope_name, inputs, scale, channels = 3,att_layers = att_layers):
+            att_ksize = kernel_size + 2 
+            num_resblock = 8       
+            bsize, a, b, c = inputs.get_shape().as_list()
+            model_params = {
+
+                        'conv1': [att_ksize,att_ksize,feature_size],
+                        'resblock': [att_ksize,att_ksize,feature_size],
+                        'conv2': [att_ksize,att_ksize,feature_size],
+                        'conv3': [att_ksize,att_ksize,feature_size],
+                        'att': [a//portion,b//portion,channels*(scale**2)*att_layers],
+                        }
+
+            with tf.variable_scope(scope_name):
+
+                x = nf.convolution_layer(inputs, model_params["conv1"], [1,1,1,1], name="conv1", activat_fn=None)
+                conv_1 = x
+                with tf.variable_scope("resblock"): 
+            
+                    #Add the residual blocks to the model
+                    for i in range(num_resblock):
+                        x = nf.resBlock(x,feature_size,scale=scaling_factor)
+                    x = nf.convolution_layer(x, model_params["conv2"], [1,1,1,1], name="conv2", activat_fn=None)
+                    x += conv_1
+
+                network = nf.convolution_layer(x, model_params['conv3'], [1,1,1,1],name="conv3", activat_fn=None)
+
+                #weighting = tf.reshape(att_net, (-1,48,1,48,1,64, att_layers))
+                
+                h_split = tf.split(network, portion, 1)
+                v_split = []
+
+                for i in range(portion):
+                    v_split.append(tf.split(h_split[i],portion,2))
+
+                cv_split = []
+                for i in range(portion):
+                    tmp_conv = []
+                    for j in range(portion):
+                        name = "att_.format_{}_{}".format(i,j)
+                        tmp =  nf.convolution_layer(v_split[i][j], model_params['att'], [1,1,1,1],name=name, padding='VALID', activat_fn=None)
+                        tmp_conv.append(tmp)
+
+                        
+                    cv_split.append(tmp_conv)
+
+                v_merge = []
+                for i in range(portion):
+                    cv_tmp = tf.concat(cv_split[i],2)
+                    v_merge.append(cv_tmp)
+                
+                weighting = tf.concat(v_merge,1)
+                weighting = tf.reshape(weighting, (-1,portion,1,portion,1,channels*(scale**2), att_layers))
+                weighting = tf.nn.softmax(weighting)
+                    
+            return weighting   
+            
+        model_params = {
+
+                        'conv1': [kernel_size,kernel_size,feature_size],
+                        'resblock': [kernel_size,kernel_size,feature_size],
+                        'conv2': [kernel_size,kernel_size,feature_size],
+                        'conv3': [kernel_size,kernel_size,3]
+                        }
+
+
+        inputs = self.inputs
+
+
+        with tf.variable_scope("EDSR_v1"):     
+            x = nf.convolution_layer(inputs, model_params["conv1"], [1,1,1,1], name="conv1", activat_fn=None)
+            conv_1 = x
+            with tf.variable_scope("resblock"): 
+            
+                    #Add the residual blocks to the model
+                    for i in range(num_resblock):
+                        x = nf.resBlock(x,feature_size,scale=scaling_factor)
+                    x = nf.convolution_layer(x, model_params["conv2"], [1,1,1,1], name="conv2",  activat_fn=None)
+                    x += conv_1
+
+
+            with tf.name_scope("upsamplex2"):
+                    weight2 = local_attention("attention_2", self.inputs, 2)
+                    network2 = nf.upsample_local_attention_v2(x, weight2,kernel_size, portion = portion,attentions = att_layers, activation=None)
+                   
+            """   
+            with tf.name_scope("upsamplex4"):
+                    weight4 = local_attention("attention_4", network2, 2)
+                    network4 = nf.upsample_local_attention_v2(network2, weight4, attentions = att_layers, activation=None)
+            """    
+           
+                    
+
+        return network2, network2
+
+
+
+
+
     def build_model(self, kwargs = {}):
 
-        model_list = ["googleLeNet_v1", "resNet_v1", "srcnn_v1", "grr_srcnn_v1", "grr_grid_srcnn_v1","edsr_v1", "espcn_v1","edsr_v2"]
+        model_list = ["googleLeNet_v1", "resNet_v1", "srcnn_v1", "grr_srcnn_v1",
+                      "grr_grid_srcnn_v1","edsr_v1", "espcn_v1","edsr_v2",
+                      "edsr_attention_v1", "edsr_1X1_v1", "edsr_local_att_v1",
+                      "edsr_local_att_v2_upsample", "edsr_attention_v2"]
         
         if self.model_ticket not in model_list:
             print("sorry, wrong ticket!")
             return 0
         
         else:
-
            
             fn = getattr(self,self.model_ticket)
             

@@ -13,7 +13,7 @@ import h5py
 import numpy as np
 import random
 import scipy.misc as misc
-
+from sklearn.metrics.cluster import entropy
 import tensorflow as tf
 
 FLAGS = tf.app.flags.FLAGS
@@ -52,29 +52,78 @@ def batch_shuffle(data, label, batch_size):
     
     return data_shuffled, label_shuffled
 
+
 def batch_shuffle_rndc(data, label, scale, subimage_size, index, batch_size):
 
-        crop_data = []
-        crop_label = []
-        i = index
-        while i < index+batch_size:
+    crop_data = []
+    crop_label = []
+    i = index
+    hard_entropy_thred = 5.2
+    soft_entropy_thred = 3.5
+    retry_cnt = 0
+    fail_cnt = 0
+    fail_idx = []
+        
+    while i < index+batch_size:
             
-            lridx = random_crop(scale, data[i].shape, subimage_size)
-            crop_lr = data[i][lridx[0]:lridx[0]+subimage_size,
+        lridx = random_crop(scale, data[i].shape, subimage_size)
+        crop_lr = data[i][lridx[0]:lridx[0]+subimage_size,
                               lridx[1]:lridx[1]+subimage_size,
                               :]
-            crop_hr = label[i][lridx[0]*scale:lridx[0]*scale+scale*subimage_size,
+        crop_hr = label[i][lridx[0]*scale:lridx[0]*scale+scale*subimage_size,
+                              lridx[1]*scale:lridx[1]*scale+scale*subimage_size,
+                              :]
+        #Reject small spatial gradient patch                  
+        #patch_grad = np.sum(np.gradient(crop_hr))
+        #crop_hr_sobel = np.array(scipy.ndimage.filters.sobel(crop_hr), dtype=np.int32)
+        patch_entropy = entropy(crop_hr)            
+        #patch_grad = np.sum(np.absolute(crop_hr_sobel - 128))
+
+        if len(crop_label) < 13:
+            entropy_thred = hard_entropy_thred
+        else:
+            entropy_thred = soft_entropy_thred
+            
+        if patch_entropy > entropy_thred:
+            crop_data.append(crop_lr)
+            crop_label.append(crop_hr) 
+
+            i += 1                      
+            fail_cnt = 0
+            #scipy.misc.imsave("./crop/crop_{}_{}.png".format(patch_grad, i), crop_hr)
+        else:
+            fail_cnt += 1
+                
+        # If the ROI cannot be found:                
+        if fail_cnt > 25:
+            fail_cnt = 0
+            retry_cnt += 1
+            i += 1
+            fail_idx.append(i)
+                
+       # Crop new ROI from the data been used to meet the batch_size
+    while retry_cnt > 0:
+            
+        idx = random.randint(index, index+batch_size-1)
+        if idx in fail_idx:
+            continue
+            
+        lridx = random_crop(scale, data[idx].shape, subimage_size)
+        crop_lr = data[idx][lridx[0]:lridx[0]+subimage_size,
+                              lridx[1]:lridx[1]+subimage_size,
+                              :]
+        crop_hr = label[idx][lridx[0]*scale:lridx[0]*scale+scale*subimage_size,
                               lridx[1]*scale:lridx[1]*scale+scale*subimage_size,
                               :]
             #Reject small spatial gradient patch                  
-            patch_grad = np.mean(np.gradient(crop_hr))
-
-            if patch_grad > 40:
+        patch_entropy = entropy(crop_hr)            
+           
+        if patch_entropy > entropy_thred:
                 crop_data.append(crop_lr)
-                crop_label.append(crop_hr) 
-                i+=1   
+                crop_label.append(crop_hr)  
+                retry_cnt -= 1
 
-        return crop_data, crop_label
+    return crop_data, crop_label
 
 
 
@@ -92,3 +141,20 @@ def log10(x):
   numerator = tf.log(x)
   denominator = tf.log(tf.constant(10, dtype=numerator.dtype))
   return numerator / denominator
+
+def laplacian_filter(image_target):
+
+    laplacian_kernel = np.array([[0,-1,0],[-1,4,-1],[0,-1,0]], dtype=np.float32)
+    laplacian_kernel = np.reshape(laplacian_kernel,[3,3,1,1])
+
+       
+    gt = tf.split(image_target, 3, axis=3)  
+
+    for i in range(3):
+
+        gt[i] = tf.nn.conv2d(gt[i], laplacian_kernel, [1,1,1,1], padding='SAME')
+        
+    gt = tf.abs(tf.concat(gt, axis=3))    
+    mean_lap = tf.reduce_mean(1/tf.reduce_mean(gt, axis=0))
+
+    return mean_lap

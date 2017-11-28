@@ -54,6 +54,7 @@ def split_img(imgname,img, padding_size, subimg_size):
     strides = subimg_size
     sub_imgs = {}
 
+
     for r in range(padded_size[0]//subimg_size[0]):
         for c in range(padded_size[1]//subimg_size[1]):
 
@@ -268,8 +269,10 @@ class evaluation:
             inputs  = inputs 
             targets  = targets - np.mean(targets)
 
+        subimg_size = self.subimg_size = (inputs.shape[0]-2*padding_size[0], inputs.shape[1]-2*padding_size[1], inputs.shape[2])
+        _, sout = split_img("input",inputs, padding_size, self.subimg_size)
 
-        _, sout = split_img("input",inputs, padding_size, subimg_size)
+        print(inputs.shape,self.subimg_size)
 
         grid_out = []
         grid_out_key = []
@@ -280,11 +283,11 @@ class evaluation:
 
         padding_size = [padding_size[0]*scale, padding_size[1]*scale]
         subimg_size = [subimg_size[0]*scale, subimg_size[1]*scale]
-        padded_size, target_split = split_img("target",targets, padding_size, subimg_size)
+        padded_size, target_split = split_img("target",targets, padding_size, self.subimg_size)
 
 
 
-        target_merge = merge_img(padded_size, target_split, padding_size, subimg_size, 1)
+        target_merge = merge_img(padded_size, target_split, padding_size, self.subimg_size, 1)
 
 
         input_pair = {
@@ -300,12 +303,13 @@ class evaluation:
 
 
         tf.reset_default_graph() 
-
+        
         self.inputs = tf.placeholder(tf.float32, [  None,
                                                     int((self.subimg_size[0]+self.padding_size[0]*2)/scale), 
                                                     int((self.subimg_size[1]+self.padding_size[1]*2)/scale),
                                                     self.channel])
-
+        
+        
         if isNormallized: inputs_n = self.inputs/255.
         else: inputs_n = self.inputs
 
@@ -315,7 +319,7 @@ class evaluation:
         saver = tf.train.Saver()
         saver.restore(sess, ckpt_file)
 
-        return sess, model_prediction[1]
+        return sess, model_prediction[0]
 
     def prediction(self, image, sess,model_prediction, scale):
 
@@ -430,7 +434,9 @@ class evaluation:
                             output_stack = {}
 
                             up_padding_size = [padding_size[0]*scale, padding_size[1]*scale]
-                            up_subimg_size = [subimg_size[0]*scale, subimg_size[1]*scale]
+                            up_subimg_size = [self.subimg_size[0]*scale, self.subimg_size[1]*scale]
+
+                            print(up_subimg_size)
 
 
                             sess, model_prediction = self.load_model(mkey,model_dict[mkey]["ckpt_file"],int(scale_key), model_dict[mkey]["model_config"], model_dict[mkey]["isNormallized"])
@@ -452,6 +458,9 @@ class evaluation:
                             model_out = merge_img(targetimg.shape, output_stack, up_padding_size,up_subimg_size, scale, down_scale_by_model=False)    
                             #print("model_out: {},{}".format(np.max(model_out), np.min(model_out)))
                             model_out = model_out*255.
+                            model_out = np.round(model_out, 0)
+                            model_out = np.clip(model_out, 0, 255).astype('uint8')
+                            targetimg = np.clip(targetimg, 0, 255).astype('uint8')
                             
                             #print("targetimg: {},{}".format(np.max(targetimg), np.min(targetimg)))
                            
@@ -462,11 +471,25 @@ class evaluation:
 
                             #scipy.misc.imsave("test.png", model_out)   
                             #scipy.misc.imsave("target.png", targetimg) 
+                            #model_out = imread("test.png", False) 
+                            #targetimg = imread("target.png", False) 
                             #model_out = scipy.misc.imread("test.png")   
                             #targetimg = scipy.misc.imread("target.png") 
                             #print(model_out)
+
+                            test_img = scipy.misc.toimage(model_out, high=np.max(model_out), low=np.min(model_out))
+                            test_img.save("./evaluation/test/test_{}.png".format(progress))
+
+                            target_img = scipy.misc.toimage(targetimg, high=np.max(targetimg), low=np.min(targetimg))
+                            target_img.save("./evaluation/target/target_{}.png".format(progress))
                             
-                            results = becnchmark.run(model_out, targetimg)
+                            #scipy.misc.imsave("./evaluation/test/test_{}.png".format(progress), model_out)  
+                            #scipy.misc.imsave("./evaluation/target/target_{}.png".format(progress), targetimg)
+
+                            model_out = imread("./evaluation/test/test_{}.png".format(progress), True) 
+                            targetimg = imread("./evaluation/target/target_{}.png".format(progress), True) 
+
+                            results = becnchmark.run(model_out, targetimg, psnr_mode="YCbCr")
                             bechmark_val[set_key][scale_key][mkey][input_key]["psnr"] = results[0]
                             bechmark_val[set_key][scale_key][mkey][input_key]["SSIM"] = results[1]
 
