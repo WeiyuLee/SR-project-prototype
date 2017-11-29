@@ -84,8 +84,8 @@ class config:
 		train_config = self.config["train"]
 
 		train_config["mode"] = "small" # Operation mode: normal or freq [normal]
-		train_config["epoch"] = 20000  # Number of epoch [10]
-		train_config["batch_size"] = 16 # The size of batch images [128]
+		train_config["epoch"] = 80000  # Number of epoch [10]
+		train_config["batch_size"] = 1 # The size of batch images [128]
 		train_config["image_size"] = 48 # The size of image to use [33]
 		train_config["label_size"] = 96 # The size of label to produce [21]
 		train_config["learning_rate"] = 1e-4 #The learning rate of gradient descent algorithm [1e-4]
@@ -101,7 +101,7 @@ class config:
 		train_config["h5_dir"] = "/home/ubuntu/dataset/SuperResolution/train" # Name of train dataset .h5 file
 		train_config["train_h5_name"] = "train" # Name of train dataset .h5 file
 		train_config["test_h5_name"] = "test" # Name of test dataset .h5 file
-		train_config["ckpt_name"] = "edsr_base_v1_fc" # Name of checkpoints
+		train_config["ckpt_name"] = "edsrv2_single" # Name of checkpoints
 		train_config["is_train"] = True # True for training, False for testing [True]
 		train_config["model_ticket"] = "edsr_v2" # Name of checkpoints
 
@@ -113,10 +113,10 @@ class config:
 										"scale":[2],
 										"subimages":[76,76],
 										"padding":[8,8],
-										"ckpt_file":"/home/ubuntu/model/model/SR_project/EDSR_base_v3_s2/EDSR_base_v3_s4-548184",
+										"ckpt_file":"/home/ubuntu/model/model/SR_project/edsrv2_single/edsrv2_single-79951",
 										"isGray": False,
 										"isNormallized":True,
-										"upsample": True,
+										"upsample": False,
 										"sub_mean":False,
 										"model_config" :{"scale":2,"feature_size" : 64}
 										}
@@ -349,9 +349,9 @@ class config:
 			mconfig["edsr_local_att_v2_upsample"] = {
 
 										"scale":[2],
-										"subimages":[48,48],
-										"padding":[24,24],
-										"ckpt_file":"/home/ubuntu/model/model/SR_project/edsr_local_att_v3_upsample/edsr_local_att_v3_upsample-728056",
+										"subimages":[80,80],
+										"padding":[8,8],
+										"ckpt_file":"/home/ubuntu/model/model/SR_project/edsr_local_att_v5_upsample/edsr_local_att_v5_upsample-638512",
 										"isGray": False,
 										"isNormallized":True,
 										"upsample": True,

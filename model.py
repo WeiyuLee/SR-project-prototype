@@ -937,8 +937,8 @@ class MODEL(object):
         # Define dataset path
 
     
-        test_dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/Set5/preprocessed_scale_"+str(self.scale),type="test")
-        dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/DIV2K/")
+        test_dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/Set5/fake_preprocessed_scale_"+str(self.scale),type="test")
+        dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/DIV2K_fake/", lrtype='bicubic', type='train')
 
         log_dir = os.path.join(self.log_dir, self.ckpt_name, "log")
         if not os.path.exists(log_dir):
@@ -1003,11 +1003,11 @@ class MODEL(object):
                                                                                                     self.image_target: batch_labels,
                                                                                                     self.dropout: 1.
                                                                                                                    })
-                batch_test_images, batch_test_labels = batch_shuffle_rndc(test_data, test_label, self.scale, self.image_size, 0, 5)
+                #batch_test_images, batch_test_labels = batch_shuffle_rndc(test_data, test_label, self.scale, self.image_size, 0, 5)
                 test_sum, test_loss = self.sess.run([self.merged_summary_test, self.l1_loss], 
                                                                                                 feed_dict={
-                                                                                                    self.input: batch_test_images, 
-                                                                                                    self.image_target: batch_test_labels,
+                                                                                                    self.input: test_data, 
+                                                                                                    self.image_target: test_label,
                                                                                                     self.dropout: 1.})
                                                                                                                        
 
@@ -1441,7 +1441,6 @@ class MODEL(object):
         hr_list = []
         lr_list = []
         lr_list2 = []
-
 
         for i in range(len(hr_imgs)):
 

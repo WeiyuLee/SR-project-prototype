@@ -11,6 +11,8 @@ import utils as ut
 import model_zoo  
 import config
 
+FULL_SIZE = True
+
 def resize(inputs, target_shape, interpolation = cv2.INTER_CUBIC):
     
     resize_img = cv2.resize(inputs, target_shape,  interpolation = interpolation)
@@ -264,15 +266,15 @@ class evaluation:
         #targets = imread(target_path)
         inputs = scipy.misc.imread(input_path, mode="RGB")
         targets = scipy.misc.imread(target_path, mode="RGB")
-       
+        
         if sub_mean:
             inputs  = inputs 
             targets  = targets - np.mean(targets)
 
-        subimg_size = self.subimg_size = (inputs.shape[0]-2*padding_size[0], inputs.shape[1]-2*padding_size[1], inputs.shape[2])
-        _, sout = split_img("input",inputs, padding_size, self.subimg_size)
+        if FULL_SIZE:
+            subimg_size = self.subimg_size = (inputs.shape[0]-2*padding_size[0], inputs.shape[1]-2*padding_size[1], inputs.shape[2])
+        _, sout = split_img("input",inputs, padding_size, subimg_size)
 
-        print(inputs.shape,self.subimg_size)
 
         grid_out = []
         grid_out_key = []
@@ -300,10 +302,7 @@ class evaluation:
 
     def load_model(self, model_ticket, ckpt_file, scale,  config = {}, isNormallized=True):
 
-
-
         tf.reset_default_graph() 
-        
         self.inputs = tf.placeholder(tf.float32, [  None,
                                                     int((self.subimg_size[0]+self.padding_size[0]*2)/scale), 
                                                     int((self.subimg_size[1]+self.padding_size[1]*2)/scale),
@@ -327,8 +326,8 @@ class evaluation:
         run model in model_ticket_list and return prediction
         """
        
-        resize_image = scipy.misc.imresize(image[0], [int((self.subimg_size[0]+self.padding_size[0]*2)/scale), int((self.subimg_size[1]+self.padding_size[1]*2)/scale)], interp="bicubic")     
-       
+        #resize_image = scipy.misc.imresize(image[0], [int((self.subimg_size[0]+self.padding_size[0]*2)/scale), int((self.subimg_size[1]+self.padding_size[1]*2)/scale)], interp="bicubic")     
+        resize_image = image[0]
         
         predicted = sess.run(model_prediction, feed_dict = {self.inputs:[resize_image]})
         
@@ -418,7 +417,8 @@ class evaluation:
                                 if model_dict[mkey]["upsample"] == False:
                                     HR_img = dataset_scale[input_key]['HR']
                                     LR_img = dataset_scale[input_key]['LR']
-                                    scale = self.scale  
+                                    scale = int(scale_key)  
+                                    
                                 else:
                                     HR_img = dataset_scale[input_key]['HR']
                                     LR_img = dataset_scale[input_key]['HR']
@@ -436,10 +436,9 @@ class evaluation:
                             up_padding_size = [padding_size[0]*scale, padding_size[1]*scale]
                             up_subimg_size = [self.subimg_size[0]*scale, self.subimg_size[1]*scale]
 
-                            print(up_subimg_size)
-
-
-                            sess, model_prediction = self.load_model(mkey,model_dict[mkey]["ckpt_file"],int(scale_key), model_dict[mkey]["model_config"], model_dict[mkey]["isNormallized"])
+                            if model_dict[mkey]["upsample"] == False: mscale = 1
+                            else: mscale = int(scale_key)
+                            sess, model_prediction = self.load_model(mkey,model_dict[mkey]["ckpt_file"],mscale, model_dict[mkey]["model_config"], model_dict[mkey]["isNormallized"])
 
                             for l in range(len(test_input)):
                                 if model_dict[mkey]["isGray"] == True: 
