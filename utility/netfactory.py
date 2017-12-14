@@ -9,8 +9,27 @@ sys.path.append('./utility')
 import utility as ut
 
 
-def convolution_layer(inputs, kernel_shape, stride, name, flatten = False ,padding = 'SAME',initializer=tf.contrib.layers.xavier_initializer(), activat_fn=tf.nn.relu):
-    
+def lrelu(x, name = "leaky", alpha = 0.2):
+
+    with tf.variable_scope(name):
+        leaky = tf.nn.relu(x) - alpha * tf.nn.relu(-x)
+    return leaky
+
+def batchnorm(input, index = 0, reuse = False):
+    with tf.variable_scope("batchnorm_{}".format(index), reuse = reuse):
+        # this block looks like it has 3 inputs on the graph unless we do this
+        input = tf.identity(input)
+
+        channels = input.get_shape()[3]
+        offset = tf.get_variable("offset", [channels], dtype=tf.float32, initializer=tf.zeros_initializer())
+        scale = tf.get_variable("scale", [channels], dtype=tf.float32, initializer=tf.random_normal_initializer(1.0, 0.02))
+        mean, variance = tf.nn.moments(input, axes=[0, 1, 2], keep_dims=False)
+        variance_epsilon = 1e-5
+        normalized = tf.nn.batch_normalization(input, mean, variance, offset, scale, variance_epsilon=variance_epsilon)
+    return normalized
+
+def convolution_layer(inputs, kernel_shape, stride, name, flatten = False ,padding = 'SAME',initializer=tf.contrib.layers.xavier_initializer(), activat_fn=tf.nn.relu, is_bn=False):
+                                                                                            #initializer=tf.contrib.layers.xavier_initializer()
     pre_shape = inputs.get_shape()[-1]
     rkernel_shape = [kernel_shape[0], kernel_shape[1], pre_shape, kernel_shape[2]]     
     
@@ -26,6 +45,11 @@ def convolution_layer(inputs, kernel_shape, stride, name, flatten = False ,paddi
         
         net = tf.nn.conv2d(inputs, weight,stride, padding=padding)
         net = tf.add(net, bias)
+
+        if is_bn:
+            net = batchnorm(net)
+        else:
+            net = net
         
         if not activat_fn==None:
             net = activat_fn(net, name=name+"_out")
@@ -130,10 +154,14 @@ def global_avg_pooling(inputs, flatten="False", name= 'global_avg_pooling'):
    
 
 ### EDSR Specialized function
-def resBlock(x,channels=64,kernel_size=[3,3],scale=1):
-    tmp = slim.conv2d(x,channels,kernel_size,activation_fn=None)
-    tmp = tf.nn.relu(tmp)
-    tmp = slim.conv2d(tmp,channels,kernel_size,activation_fn=None)
+def resBlock(x,channels=64,kernel_size=[3,3],scale=1, reuse = False, is_bn = False, idx = 0, initializer=tf.contrib.layers.xavier_initializer(),activation_fn=tf.nn.relu):
+
+    tmp = slim.conv2d(x,channels,kernel_size,activation_fn=activation_fn, weights_initializer=initializer)
+    if is_bn:
+        tmp = batchnorm(tmp, index = idx, reuse = reuse)
+    else:
+        tmp = tmp 
+    tmp = slim.conv2d(tmp,channels,kernel_size,activation_fn=None, weights_initializer=initializer)
     tmp *= scale
     return x + tmp
 
@@ -157,7 +185,7 @@ def edsr_resblock(inputs, kernel_shape, stride = [1,1,1,1], repeations = 1, scal
 
     return outputs
 
-def upsample(x,scale=2,features=64,channels = 3,activation=tf.nn.relu):
+def upsample(x,scale=2,features=64,channels = 3,activation=tf.nn.relu, initializer=tf.contrib.layers.xavier_initializer()):
 
     assert scale in [2,3,4], "Only support scale 2,3,4"
     ch = channels 
@@ -165,11 +193,11 @@ def upsample(x,scale=2,features=64,channels = 3,activation=tf.nn.relu):
     if ch == 3: isColor = True
     else: isColor = False
 
-    x = slim.conv2d(x,features,[3,3],activation_fn=activation)
+    x = slim.conv2d(x,features,[3,3],activation_fn=activation, weights_initializer=initializer)
     if scale == 2:
 
         ps_features = ch*(scale**2)
-        x = slim.conv2d(x,ps_features,[3,3],activation_fn=activation)
+        x = slim.conv2d(x,ps_features,[3,3],activation_fn=activation, weights_initializer=initializer)
         #x = slim.conv2d_transpose(x,ps_features,6,stride=1,activation_fn=activation)
         x = PS(x,2,color=isColor)
     elif scale == 3:
