@@ -903,7 +903,7 @@ class model_zoo:
         if is_training:
 
             if d_inputs == None: 
-                d_inputs = network  + 2.0*(network - d_target)
+                d_inputs = network  + 3.0*(network - d_target)
                 #d_inputs = network
     
             input_gan = tf.concat([d_inputs, d_target], axis=3)

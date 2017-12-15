@@ -2299,8 +2299,8 @@ class MODEL(object):
             tf.summary.image("target_image",target*255, collections=['train'])
             tf.summary.image("output_image",gen_f*255, collections=['train'])
             tf.summary.image("enhence_img",(2.0*gen_f-target)*255, collections=['train'])
-            tf.summary.image("dis_f_img",dis_f*255, collections=['train'])
-            tf.summary.image("dis_t_img",dis_t*255, collections=['train'])
+            tf.summary.image("dis_f_img",10*dis_f*255, collections=['train'])
+            tf.summary.image("dis_t_img",10*dis_t*255, collections=['train'])
             tf.summary.image("dis_diff",tf.abs(dis_t-dis_t)*255, collections=['train'])
             tf.summary.histogram("d_false", dis_f, collections=['train'])
             tf.summary.histogram("d_true", dis_t, collections=['train'])
@@ -2359,10 +2359,10 @@ class MODEL(object):
         
         # Define iteration counter, timer and average loss
         itera_counter = 0
-        learning_rate = 1e-4
+        learning_rate = 5e-5
         #train_batch_num = len(train_data) // self.batch_size
 
-        epoch_pbar = tqdm(range(self.epoch))
+        epoch_pbar = tqdm(range(1908,self.epoch))
         for ep in epoch_pbar:            
             # Run by batch images
             random.shuffle(dataset) 
@@ -2411,7 +2411,7 @@ class MODEL(object):
                                                  feed_dict={self.input: batch_images,
                                                             self.image_target: batch_labels,
                                                             self.dropout: 1.,
-                                                            self.lr:learning_rate})
+                                                            self.lr:1e-4})
                     #self.sess.run(self.clip_discriminator_var_op)
                           
 

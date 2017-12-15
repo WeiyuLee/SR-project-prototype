@@ -503,11 +503,11 @@ class config:
 			
 			mconfig["edsr_lsgan"] = {
 
-										"scale":[2],
+										"scale":[1],
 										"subimages":[80,80],
 										"padding":[8,8],
 										#"ckpt_file":"/home/ubuntu/model/model/SR_project/edsr_base_attention_v2_oh/edsr_base_attention_v2_oh-719656",
-										"ckpt_file":"/home/ubuntu/model/model/SR_project/edsr_ls_gan/edsr_ls_gan-694512",
+										"ckpt_file":"/home/ubuntu/model/model/SR_project/edsr_ls_gan_res4/edsr_ls_gan_res4-103712",
 										"isGray": False,
 										"isNormallized":True,
 										"upsample": False,
@@ -558,11 +558,11 @@ class config:
 			
 			mconfig["edsr_lsgan_up"] = {
 
-										"scale":[2],
+										"scale":[1],
 										"subimages":[80,80],
 										"padding":[8,8],
 										#"ckpt_file":"/home/ubuntu/model/model/SR_project/edsr_base_attention_v2_oh/edsr_base_attention_v2_oh-719656",
-										"ckpt_file":"/home/ubuntu/model/model/SR_project/edsr_lsgan_up_aux/edsr_lsgan_up_aux-64952",
+										"ckpt_file":"/home/ubuntu/model/model/SR_project/edsr_lsgan_up_aux_v2/edsr_lsgan_up_aux_v2-99952",
 										"isGray": False,
 										"isNormallized":True,
 										"upsample": False,
