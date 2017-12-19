@@ -2347,7 +2347,7 @@ class MODEL(object):
         #96X96
         #test_dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/Set5/validation96_scale_"+"2"+"/",type="test")
         #dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/DIV2K_base/", lrtype='bicubic', type='train')
-        
+
         #gcloud96X96
         test_dataset = self.load_divk("//home/moxalab/data/SuperResolution/Set5/validation96_scale_"+"2"+"/",type="test")
         dataset = self.load_divk("/home/moxalab/data/SuperResolution/DIV2K_base/", lrtype='bicubic', type='train')
@@ -2376,7 +2376,7 @@ class MODEL(object):
         learning_rate = 1e-4
         #train_batch_num = len(train_data) // self.batch_size
 
-        epoch_pbar = tqdm(range(0,self.epoch))
+        epoch_pbar = tqdm(range(287,self.epoch))
         for ep in epoch_pbar:            
             # Run by batch images
             random.shuffle(dataset) 
@@ -2389,14 +2389,14 @@ class MODEL(object):
             batch_pbar = tqdm(range(0, len(train_data)//self.batch_size), desc="Batch: [0]")
             
             action = 0
-            cycle_times = 1000
+            cycle_times = 100000
             current_cycle = ep%cycle_times
 
-            if current_cycle < 1000:
+            if current_cycle < 500:
                 action = 2
-            elif current_cycle >= 1000 and current_cycle < 50000:
+            elif current_cycle >= 1000 and current_cycle < 2000:
                 action = 2
-            elif current_cycle >= 50000:
+            elif current_cycle >= 2000:
                 action = 2
 
             itr_per_epoch = len(train_data)//self.batch_size 
@@ -2407,13 +2407,13 @@ class MODEL(object):
                 itera_counter += 1
                 batch_index = idx*self.batch_size 
                 #batch_images, batch_labels = batch_shuffle_rndc(train_data, train_label, self.scale, self.image_size,batch_index, self.batch_size)
-                start_time = time.time()
+                #start_time = time.time()
                 batch_images, batch_labels = batch_shuffle_rndc(train_data, train_label, 1, self.image_size*2,batch_index, self.batch_size)
-                elapse = time.time() - start_time
-                print("batch elapse:", elapse)
+                #elapse = time.time() - start_time
+                #print("batch elapse:", elapse)
                 # Select different action each cycle time
 
-                start_time = time.time()
+                #start_time = time.time()
                 if action == 0:
                     
                     self.sess.run(self.train_l1,
@@ -2452,8 +2452,8 @@ class MODEL(object):
                                                         self.lr:learning_rate})
                     #self.sess.run(self.clip_discriminator_var_op)
 
-                elapse = time.time() - start_time 
-                print("training elapse:", elapse)           
+                #elapse = time.time() - start_time 
+                #print("training elapse:", elapse)           
                 #batch_pbar.refresh()
               
             if ep % 50 == 1:

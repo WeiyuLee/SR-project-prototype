@@ -900,7 +900,7 @@ class model_zoo:
                         network = nf.convolution_layer(upsample2, model_params["conv3"], [1,1,1,1], name="conv3", activat_fn=None, initializer=init)
            
         ###Discriminator
-        num_resblock = 4
+        num_resblock = 8
 
         if is_training:
 
