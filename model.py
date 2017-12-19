@@ -2345,8 +2345,12 @@ class MODEL(object):
         #dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/DIV2K_fake/", lrtype='bicubic', type='train')
 
         #96X96
-        test_dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/Set5/validation96_scale_"+"2"+"/",type="test")
-        dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/DIV2K_base/", lrtype='bicubic', type='train')
+        #test_dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/Set5/validation96_scale_"+"2"+"/",type="test")
+        #dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/DIV2K_base/", lrtype='bicubic', type='train')
+        
+        #gcloud96X96
+        test_dataset = self.load_divk("//home/moxalab/data/SuperResolution/Set5/validation96_scale_"+"2"+"/",type="test")
+        dataset = self.load_divk("/home/moxalab/data/SuperResolution/DIV2K_base/", lrtype='bicubic', type='train')
 
         #48X48
         #test_dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/Set5/validation_scale_"+ str(self.scale),type="test")
