@@ -493,7 +493,7 @@ class config:
 		train_config["h5_dir"] = "/home/ubuntu/dataset/SuperResolution/train" # Name of train dataset .h5 file
 		train_config["train_h5_name"] = "train" # Name of train dataset .h5 file
 		train_config["test_h5_name"] = "test" # Name of test dataset .h5 file
-		train_config["ckpt_name"] = "edsr_ls_gan_res4" # Name of checkpoints
+		train_config["ckpt_name"] = "edsr_ls_gan_res16" # Name of checkpoints
 		train_config["is_train"] = True # True for training, False for testing [True]
 		train_config["model_ticket"] = "edsr_lsgan" # Name of checkpoints
 

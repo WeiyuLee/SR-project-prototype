@@ -17,6 +17,8 @@ import model_zoo
 import scipy.misc as misc
 import random
 
+import time
+
 from utils import (
   read_data, 
   batch_shuffle_rndc,
@@ -2286,6 +2288,10 @@ class MODEL(object):
         PSNR = tf.constant(255**2,dtype=tf.float32)/mse
         PSNR = tf.constant(10,dtype=tf.float32)*log10(PSNR)
 
+        mse_ref = tf.reduce_mean(tf.squared_difference(target*255.,self.image_input*255.))    
+        PSNR_ref = tf.constant(255**2,dtype=tf.float32)/mse_ref
+        PSNR_ref = tf.constant(10,dtype=tf.float32)*log10(PSNR_ref)
+
         
         with tf.name_scope('train_summary'):
             tf.summary.scalar("l1_loss", self.g_l1loss, collections=['train'])
@@ -2293,14 +2299,16 @@ class MODEL(object):
             tf.summary.scalar("d_true_loss", disc_ture_loss, collections=['train'])
             tf.summary.scalar("d_fake_loss", disc_fake_loss, collections=['train'])
             tf.summary.scalar("grad_loss", d_gp, collections=['train'])
+            tf.summary.scalar("dis_f_mean", tf.reduce_mean(dis_f), collections=['train'])
+            tf.summary.scalar("dis_t_mean", tf.reduce_mean(dis_t), collections=['train'])
             tf.summary.scalar("MSE", mse, collections=['train'])
             tf.summary.scalar("PSNR",PSNR, collections=['train'])
             tf.summary.image("input_image",self.input , collections=['train'])
             tf.summary.image("target_image",target*255, collections=['train'])
             tf.summary.image("output_image",gen_f*255, collections=['train'])
             tf.summary.image("enhence_img",(2.0*gen_f-target)*255, collections=['train'])
-            tf.summary.image("dis_f_img",10*dis_f*255, collections=['train'])
-            tf.summary.image("dis_t_img",10*dis_t*255, collections=['train'])
+            tf.summary.image("dis_f_img",100*dis_f*255, collections=['train'])
+            tf.summary.image("dis_t_img",100*dis_t*255, collections=['train'])
             tf.summary.image("dis_diff",tf.abs(dis_t-dis_t)*255, collections=['train'])
             tf.summary.histogram("d_false", dis_f, collections=['train'])
             tf.summary.histogram("d_true", dis_t, collections=['train'])
@@ -2308,11 +2316,13 @@ class MODEL(object):
             self.merged_summary_train = tf.summary.merge_all('train')          
 
         with tf.name_scope('test_summary'):
+
             tf.summary.scalar("loss", self.g_l1loss, collections=['test'])
             tf.summary.scalar("d_loss", self.d_loss, collections=['test'])
             tf.summary.scalar("g_loss", disc_fake_loss, collections=['test'])
             tf.summary.scalar("MSE", mse, collections=['test'])
             tf.summary.scalar("PSNR",PSNR, collections=['test'])
+            tf.summary.scalar("PSNR_ref",PSNR_ref, collections=['test'])
             tf.summary.image("input_image",self.input , collections=['test'])
             tf.summary.image("target_image",target*255, collections=['test'])
             tf.summary.image("output_image",gen_f*255, collections=['test'])
@@ -2359,10 +2369,10 @@ class MODEL(object):
         
         # Define iteration counter, timer and average loss
         itera_counter = 0
-        learning_rate = 5e-5
+        learning_rate = 1e-4
         #train_batch_num = len(train_data) // self.batch_size
 
-        epoch_pbar = tqdm(range(1908,self.epoch))
+        epoch_pbar = tqdm(range(0,self.epoch))
         for ep in epoch_pbar:            
             # Run by batch images
             random.shuffle(dataset) 
@@ -2393,9 +2403,13 @@ class MODEL(object):
                 itera_counter += 1
                 batch_index = idx*self.batch_size 
                 #batch_images, batch_labels = batch_shuffle_rndc(train_data, train_label, self.scale, self.image_size,batch_index, self.batch_size)
+                start_time = time.time()
                 batch_images, batch_labels = batch_shuffle_rndc(train_data, train_label, 1, self.image_size*2,batch_index, self.batch_size)
+                elapse = time.time() - start_time
+                print("batch elapse:", elapse)
                 # Select different action each cycle time
 
+                start_time = time.time()
                 if action == 0:
                     
                     self.sess.run(self.train_l1,
@@ -2434,7 +2448,8 @@ class MODEL(object):
                                                         self.lr:learning_rate})
                     #self.sess.run(self.clip_discriminator_var_op)
 
-                              
+                elapse = time.time() - start_time 
+                print("training elapse:", elapse)           
                 #batch_pbar.refresh()
               
             if ep % 50 == 1:

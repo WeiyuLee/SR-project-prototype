@@ -882,45 +882,52 @@ class model_zoo:
                         'conv3': [3,3,3],
                         'd_output': [3,3,3]
                         }
-        with tf.variable_scope("EDSR_gen", reuse=reuse):     
-            x = nf.convolution_layer(self.inputs, model_params["conv1"], [1,1,1,1], name="conv1", activat_fn=None, initializer=init)
-            conv_1 = x
-            with tf.variable_scope("resblock",reuse=reuse): 
-            
-                    #Add the residual blocks to the model
-                    for i in range(num_resblock):
-                        x = nf.resBlock(x,feature_size,scale=scaling_factor, reuse=reuse, idx = i, initializer=init)
-                    x = nf.convolution_layer(x, model_params["conv2"], [1,1,1,1], name="conv2", activat_fn=None, initializer=init)
-                    x += conv_1
+        with tf.device('/gpu:0'):
+            with tf.variable_scope("EDSR_gen", reuse=reuse):     
+                x = nf.convolution_layer(self.inputs, model_params["conv1"], [1,1,1,1], name="conv1", activat_fn=None, initializer=init)
+                conv_1 = x
+                with tf.variable_scope("resblock",reuse=reuse): 
+                
+                        #Add the residual blocks to the model
+                        for i in range(num_resblock):
+                            x = nf.resBlock(x,feature_size,scale=scaling_factor, reuse=reuse, idx = i, initializer=init)
+                        x = nf.convolution_layer(x, model_params["conv2"], [1,1,1,1], name="conv2", activat_fn=None, initializer=init)
+                        x += conv_1
 
-            with tf.variable_scope("upsamplex2", reuse=reuse):
-                    #upsample2 = nf.upsample(x, 2, feature_size, 3,None, initializer=init)
-                    upsample2 = x
-                    network = nf.convolution_layer(upsample2, model_params["conv3"], [1,1,1,1], name="conv3", activat_fn=None, initializer=init)
+                with tf.variable_scope("upsamplex2", reuse=reuse):
+                        #upsample2 = nf.upsample(x, 2, feature_size, 3,None, initializer=init)
+                        upsample2 = x
+                        network = nf.convolution_layer(upsample2, model_params["conv3"], [1,1,1,1], name="conv3", activat_fn=None, initializer=init)
            
         ###Discriminator
+        num_resblock = 4
 
         if is_training:
 
             if d_inputs == None: 
-                d_inputs = network  + 3.0*(network - d_target)
-                #d_inputs = network
-    
-            input_gan = tf.concat([d_inputs, d_target], axis=3)
-            
 
-            with tf.variable_scope("EDSR_dis", reuse=reuse):     
-                x = nf.convolution_layer( input_gan, model_params["conv1"], [1,1,1,1], name="conv1",  activat_fn=nf.lrelu, is_bn=True,initializer=init)
-                conv_1 = x
-                with tf.variable_scope("resblock", reuse=reuse): 
-                
-                        #Add the residual blocks to the model
-                        for i in range(num_resblock):
-                            x = nf.resBlock(x,feature_size,scale=scaling_factor, is_bn=True, reuse=reuse, idx = i, activation_fn=nf.lrelu, initializer=init)
-                        x = nf.convolution_layer(x, model_params["conv2"], [1,1,1,1], name="conv2",activat_fn=nf.lrelu,  is_bn=True, initializer=init)
-                        x += conv_1
-                x = nf.convolution_layer(x, model_params["conv1"], [1,1,1,1], name="conv3",  activat_fn=nf.lrelu, is_bn=True, initializer=init)
-                d_logits = nf.convolution_layer(x, model_params["d_output"], [1,1,1,1], name="conv4", activat_fn=nf.lrelu, flatten=False, initializer=init)
+                #d_inputs = network  + 3.0*(network - d_target)
+                #Test 
+                res_gen = network - d_target
+                input_gan = tf.concat([network,res_gen], axis=3)
+                #d_inputs = network
+            else:
+                res_gen = d_inputs - d_target
+                input_gan = tf.concat([d_inputs, res_gen], axis=3)
+            
+            with tf.device('/gpu:0'):
+                with tf.variable_scope("EDSR_dis", reuse=reuse):     
+                    x = nf.convolution_layer( input_gan, model_params["conv1"], [1,1,1,1], name="conv1",  activat_fn=nf.lrelu, is_bn=True,initializer=init)
+                    conv_1 = x
+                    with tf.variable_scope("resblock", reuse=reuse): 
+                    
+                            #Add the residual blocks to the model
+                            for i in range(num_resblock):
+                                x = nf.resBlock(x,feature_size,scale=scaling_factor, is_bn=True, reuse=reuse, idx = i, activation_fn=nf.lrelu, initializer=init)
+                            x = nf.convolution_layer(x, model_params["conv2"], [1,1,1,1], name="conv2",activat_fn=nf.lrelu,  is_bn=True, initializer=init)
+                            x += conv_1
+                    x = nf.convolution_layer(x, model_params["conv1"], [1,1,1,1], name="conv3",  activat_fn=nf.lrelu, is_bn=True, initializer=init)
+                    d_logits = nf.convolution_layer(x, model_params["d_output"], [1,1,1,1], name="conv4", activat_fn=nf.lrelu, flatten=False, initializer=init)
 
         else:
             d_logits = network

@@ -58,7 +58,7 @@ def batch_shuffle_rndc(data, label, scale, subimage_size, index, batch_size):
     crop_data = []
     crop_label = []
     i = index
-    hard_entropy_thred = 5.2
+    hard_entropy_thred = 3.5
     soft_entropy_thred = 3.5
     retry_cnt = 0
     fail_cnt = 0
