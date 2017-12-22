@@ -26,7 +26,8 @@ def main(_):
     if not os.path.exists(conf["output_dir"]):
         os.makedirs(conf["output_dir"])
 
-    with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
+    #with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
+    with tf.Session() as sess:
         srcnn = MODEL(sess, 
                       mode=conf["mode"],
                       epoch=conf["epoch"],
