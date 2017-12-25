@@ -2501,9 +2501,10 @@ class MODEL(object):
         mz = model_zoo.model_zoo(self.image_input, self.dropout, self.is_train, self.model_ticket)
         
         # Build model
-        _, dis_t = mz.build_model({"d_inputs":self.target,"d_target":self.target,"scale":self.scale,"feature_size" :64,"reuse":False, "is_training":True,"is_generate":False})
-        gen_f, dis_f = mz.build_model({"d_inputs":None,"d_target":self.target,"scale":self.scale,"feature_size" :64, "reuse":True, "is_training":True,"is_generate":True})
-
+        
+        gen_f, dis_f = mz.build_model({"d_inputs":None,"d_target":self.target,"scale":self.scale,"feature_size" :64, "reuse":False, "is_training":True,"is_generate":True})
+        _, dis_t = mz.build_model({"d_inputs":self.target,"d_target":self.target,"scale":self.scale,"feature_size" :64,"reuse":True, "is_training":True,"is_generate":False})
+        
         #Calculate gradient panalty
         self.epsilon = epsilon = tf.random_uniform([], 0.0, 1.0)
         x_hat = epsilon * self.target + (1. - epsilon) * (gen_f)
@@ -2519,9 +2520,8 @@ class MODEL(object):
         reconstucted_weight = 1.0  #StarGAN is 10
         self.d_loss =   disc_fake_loss - disc_ture_loss + d_gp
         self.g_l1loss = tf.reduce_mean(tf.losses.absolute_difference(target,gen_f))
-        self.g_loss =  -1.0*disc_fake_loss + reconstucted_weight*self.g_l1loss
+        self.g_loss =  -100.0*disc_fake_loss + reconstucted_weight*self.g_l1loss  #Test weight to 100, original is 1.0
         
-       
 
         train_variables = tf.trainable_variables()
         generator_variables = [v for v in train_variables if v.name.startswith("EDSR_gen")]
@@ -2553,7 +2553,7 @@ class MODEL(object):
             tf.summary.image("enhence_img",(2.0*gen_f-target)*255, collections=['train'])
             tf.summary.image("dis_f_img",10*dis_f*255, collections=['train'])
             tf.summary.image("dis_t_img",10*dis_t*255, collections=['train'])
-            tf.summary.image("dis_diff",tf.abs(dis_t-dis_t)*255, collections=['train'])
+            tf.summary.image("dis_diff",tf.abs(dis_f-dis_t)*255, collections=['train'])
             tf.summary.histogram("d_false", dis_f, collections=['train'])
             tf.summary.histogram("d_true", dis_t, collections=['train'])
 
@@ -2583,14 +2583,9 @@ class MODEL(object):
 
         # Define dataset path
 
-        #Single image    
-        test_dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/Set5/fake_preprocessed_scale_"+str(self.scale),type="test")
-        dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/DIV2K_fake/", lrtype='bicubic', type='train')
-
-
         #48X48
-        #test_dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/Set5/validation_scale_"+ str(self.scale),type="test")
-        #dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/DIV2K/", lrtype='all', type='train')
+        test_dataset = self.load_divk("/home/moxalab/data/SuperResolution/Set5/validation_scale_"+ str(self.scale),type="test")
+        dataset = self.load_divk("/home/moxalab/data/SuperResolution/DIV2K/", lrtype='all', type='train')
        
 
         log_dir = os.path.join(self.log_dir, self.ckpt_name, "log")
@@ -2631,7 +2626,7 @@ class MODEL(object):
             if current_cycle < 1000:
                 action = 2
             elif current_cycle >= 1000 and current_cycle < 5000:
-                action = 1
+                action = 2
             elif current_cycle >= 5000:
                 action = 2
 
@@ -2668,20 +2663,20 @@ class MODEL(object):
                 elif action == 2:
 
                     
-                    if idx%5 == 0:
+                    #if idx%5 == 0:
                     
-                        t = self.sess.run([self.train_g],
-                                                 feed_dict={self.input: batch_images,
-                                                            self.image_target: batch_labels,
-                                                            self.dropout: 1.,
-                                                            self.lr:learning_rate})
-                       
-                    
-                    _, loss = self.sess.run([self.train_d, self.d_loss],
+                    self.sess.run([self.train_g],
                                              feed_dict={self.input: batch_images,
                                                         self.image_target: batch_labels,
                                                         self.dropout: 1.,
                                                         self.lr:learning_rate})
+                   
+                    for i in range(5):    
+                        self.sess.run([self.train_d],
+                                                 feed_dict={self.input: batch_images,
+                                                            self.image_target: batch_labels,
+                                                            self.dropout: 1.,
+                                                            self.lr:learning_rate})
                     #self.sess.run(self.clip_discriminator_var_op)
 
                               
@@ -2850,10 +2845,10 @@ class MODEL(object):
         
         # Define iteration counter, timer and average loss
         itera_counter = 0
-        learning_rate = 1e-4
+        learning_rate = 1e-2
         #train_batch_num = len(train_data) // self.batch_size
 
-        epoch_pbar = tqdm(range(1210,self.epoch))
+        epoch_pbar = tqdm(range(3151,self.epoch))
         for ep in epoch_pbar:            
             # Run by batch images
             random.shuffle(dataset) 
@@ -2926,7 +2921,7 @@ class MODEL(object):
                                              feed_dict={self.input: batch_images,
                                                         self.image_target: batch_labels,
                                                         self.dropout: 1.,
-                                                        self.lr:learning_rate})
+                                                        self.lr:learning_rate/2})
                     #self.sess.run(self.clip_discriminator_var_op)
 
                 #elapse = time.time() - start_time 

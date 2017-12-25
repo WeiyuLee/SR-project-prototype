@@ -987,15 +987,15 @@ class model_zoo:
          
         ###Discriminator
 
-        
-
         if is_training:
 
             if d_inputs == None: 
-                d_inputs = network  + 2.0*(network - d_target)
-                #d_inputs = network
-            input_gan = tf.concat([d_inputs, d_target], axis=3)
+                #d_inputs = network  + 2.0*(network - d_target)
+                d_inputs = network
             
+            #input_gan = tf.concat([d_inputs, d_target], axis=3)
+            input_gan = d_inputs
+
             with tf.variable_scope("EDSR_dis", reuse=reuse):     
                 x = nf.convolution_layer( input_gan, model_params["conv1"], [1,1,1,1], name="conv1",  activat_fn=nf.lrelu, is_bn=True,initializer=init)
                 conv_1 = x
