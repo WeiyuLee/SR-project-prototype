@@ -485,17 +485,26 @@ class config:
 		train_config["scale"] = 2 # The size of scale factor for preprocessing input image [3]
 		train_config["train_extract_stride"] = 14 #The size of stride to apply input image [14]
 		train_config["test_extract_stride"] = train_config["label_size"] #The size of stride to apply input image [14]
-		train_config["checkpoint_dir"] = "/home/ubuntu/model/model/SR_project/" #Name of checkpoint directory [checkpoint]
-		train_config["log_dir"] = "/home/ubuntu/model/model/SR_project/" #Name of checkpoint directory [checkpoint]
+		train_config["checkpoint_dir"] = "/home/wei/ML/model/SuperResolution/SR-project-prototype/" #Name of checkpoint directory [checkpoint]
+		train_config["log_dir"] = "/home/wei/ML/model/SuperResolution/SR-project-prototype/log/" #Name of checkpoint directory [checkpoint]
 		train_config["output_dir"] = "output" # Name of sample directory [output]
 		train_config["train_dir"] =  "Train" # Name of train dataset directory
 		train_config["test_dir"] = "Test/Set5" # Name of test dataset directory [Test/Set5]
-		train_config["h5_dir"] = "/home/ubuntu/dataset/SuperResolution/train" # Name of train dataset .h5 file
+		train_config["h5_dir"] = "/home/wei/ML/dataset/SuperResolution/train" # Name of train dataset .h5 file
 		train_config["train_h5_name"] = "train" # Name of train dataset .h5 file
 		train_config["test_h5_name"] = "test" # Name of test dataset .h5 file
-		train_config["ckpt_name"] = "edsr_ls_gan_res16" # Name of checkpoints
+#		train_config["ckpt_name"] = "edsr_ls_gan_res16" # Name of checkpoints
+#		train_config["ckpt_name"] = "edsr_ls_gan_res16_v2" # Name of checkpoints ep 2425
+#		train_config["ckpt_name"] = "edsr_ls_gan_res16_v3" # Name of checkpoints ep 2357
+#		train_config["ckpt_name"] = "edsr_ls_gan_res16_v4_lamda_gL1" # Name of checkpoints        
+#		train_config["ckpt_name"] = "edsr_ls_gan_res16_v4_lamda0.1_gL10.1" # Name of checkpoints        
+#		train_config["ckpt_name"] = "edsr_ls_gan_res16_v4_lamda0.1_gL11" # Name of checkpoints                
+#		train_config["ckpt_name"] = "edsr_ls_gan_res16_v4_lamda0.1_gL11_outvstar" # Name of checkpoints                
+#		train_config["ckpt_name"] = "edsr_ls_gan_res16_v4_lamda0.1_gL11_enhance" # Name of checkpoints                
+		train_config["ckpt_name"] = "edsr_ls_gan_res16_v5_lamda10_gL1beta" # Name of checkpoints       
 		train_config["is_train"] = True # True for training, False for testing [True]
 		train_config["model_ticket"] = "edsr_lsgan" # Name of checkpoints
+		train_config["curr_epoch"] = 101 # Name of checkpoints        
 
 		def edsr_lsgan(self):
 						
@@ -507,7 +516,7 @@ class config:
 										"subimages":[80,80],
 										"padding":[8,8],
 										#"ckpt_file":"/home/ubuntu/model/model/SR_project/edsr_base_attention_v2_oh/edsr_base_attention_v2_oh-719656",
-										"ckpt_file":"/home/ubuntu/model/model/SR_project/edsr_ls_gan_res4/edsr_ls_gan_res4-103712",
+										"ckpt_file":"/home/wei/ML/model/SR_project/edsr_ls_gan_res4/edsr_ls_gan_res4-103712",
 										"isGray": False,
 										"isNormallized":True,
 										"upsample": False,
@@ -580,3 +589,59 @@ class config:
 		eval_config["test_set"] = ["Set5"]
 		eval_config["models"] = [edsr_lsgan_up(self)]
 		eval_config["summary_file"] = "example_summary.txt"
+        
+	def EDSR_WGAN_MNIST(self):
+
+		train_config = self.config["train"]
+
+		train_config["mode"] = "small" # Operation mode: normal or freq [normal]
+		train_config["epoch"] = 40  # Number of epoch [10]
+		train_config["batch_size"] = 64 # The size of batch images [128]
+		train_config["image_size"] = 28 # The size of image to use [33]
+		train_config["label_size"] = 28 # The size of label to produce [21]
+		train_config["learning_rate"] = 1e-4 #The learning rate of gradient descent algorithm [1e-4]
+		train_config["color_dim"] = 1 # Dimension of image color. [1]
+		train_config["scale"] = 2 # The size of scale factor for preprocessing input image [3]
+		train_config["train_extract_stride"] = 14 #The size of stride to apply input image [14]
+		train_config["test_extract_stride"] = train_config["label_size"] #The size of stride to apply input image [14]
+		train_config["checkpoint_dir"] = "/home/wei/ML/model/SuperResolution/SR-project-prototype/" #Name of checkpoint directory [checkpoint]
+		train_config["log_dir"] = "/home/wei/ML/model/SuperResolution/SR-project-prototype/log/" #Name of checkpoint directory [checkpoint]
+		train_config["output_dir"] = "output" # Name of sample directory [output]
+		train_config["train_dir"] =  "Train" # Name of train dataset directory
+		train_config["test_dir"] = "Test/Set5" # Name of test dataset directory [Test/Set5]
+		train_config["h5_dir"] = "/home/wei/ML/dataset/SuperResolution/train" # Name of train dataset .h5 file
+		train_config["train_h5_name"] = "train" # Name of train dataset .h5 file
+		train_config["test_h5_name"] = "test" # Name of test dataset .h5 file
+		train_config["ckpt_name"] = "EDSR_WGAN_MNIST_v1" # Name of checkpoints       
+		train_config["is_train"] = True # True for training, False for testing [True]
+		train_config["model_ticket"] = "EDSR_WGAN_MNIST" # Name of checkpoints
+		train_config["curr_epoch"] = 0 # Name of checkpoints        
+
+		def edsr_lsgan(self):
+						
+			mconfig = {}
+			
+			mconfig["edsr_lsgan"] = {
+
+										"scale":[1],
+										"subimages":[80,80],
+										"padding":[8,8],
+										#"ckpt_file":"/home/ubuntu/model/model/SR_project/edsr_base_attention_v2_oh/edsr_base_attention_v2_oh-719656",
+										"ckpt_file":"/home/wei/ML/model/SR_project/edsr_ls_gan_res4/edsr_ls_gan_res4-103712",
+										"isGray": False,
+										"isNormallized":True,
+										"upsample": False,
+										"sub_mean":False,
+										"model_config" :{"d_inputs":None, "d_target":None,"scale":2,"feature_size" : 64,"dropout" : 1.0,"feature_size" : 64, "is_training":False, "reuse":False}
+										}
+			
+			
+			return mconfig
+
+		
+
+		eval_config = self.config["evaluation"]
+		eval_config["dataroot"] = '/home/ubuntu/dataset/SuperResolution/'
+		eval_config["test_set"] = ["Set5"]
+		eval_config["models"] = [edsr_lsgan(self)]
+		eval_config["summary_file"] = "example_summary.txt"        

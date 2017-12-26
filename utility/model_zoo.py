@@ -863,7 +863,6 @@ class model_zoo:
 
     def edsr_lsgan(self, kwargs):
 
-        ###Generator
         init = tf.random_uniform_initializer(minval=-0.05, maxval=0.05, seed=None, dtype=tf.float32)
         scale = kwargs["scale"]
         reuse = kwargs["reuse"]
@@ -872,8 +871,7 @@ class model_zoo:
         is_training = kwargs["is_training"]
         feature_size = 64
         scaling_factor = 1
-        num_resblock = 4
-            
+
         model_params = {
 
                         'conv1': [3,3,feature_size],
@@ -881,24 +879,32 @@ class model_zoo:
                         'conv2': [3,3,feature_size],
                         'conv3': [3,3,3],
                         'd_output': [3,3,3]
+                        
                         }
-        with tf.device('/gpu:0'):
-            with tf.variable_scope("EDSR_gen", reuse=reuse):     
-                x = nf.convolution_layer(self.inputs, model_params["conv1"], [1,1,1,1], name="conv1", activat_fn=None, initializer=init)
-                conv_1 = x
-                with tf.variable_scope("resblock",reuse=reuse): 
-                
-                        #Add the residual blocks to the model
-                        for i in range(num_resblock):
-                            x = nf.resBlock(x,feature_size,scale=scaling_factor, reuse=reuse, idx = i, initializer=init)
-                        x = nf.convolution_layer(x, model_params["conv2"], [1,1,1,1], name="conv2", activat_fn=None, initializer=init)
-                        x += conv_1
+        
+        ###Generator
+        num_resblock = 4
+                   
+        g_input = self.inputs
+        
+        with tf.variable_scope("EDSR_gen", reuse=reuse):     
+            x = nf.convolution_layer(g_input, model_params["conv1"], [1,1,1,1], name="conv1", activat_fn=None, initializer=init)
+            conv_1 = x
+            with tf.variable_scope("resblock",reuse=reuse): 
+            
+                    #Add the residual blocks to the model
+                    for i in range(num_resblock):
+                        x = nf.resBlock(x,feature_size,scale=scaling_factor, reuse=reuse, idx = i, initializer=init)
+                    x = nf.convolution_layer(x, model_params["conv2"], [1,1,1,1], name="conv2", activat_fn=None, initializer=init)
+                    x += conv_1
 
-                with tf.variable_scope("upsamplex2", reuse=reuse):
-                        #upsample2 = nf.upsample(x, 2, feature_size, 3,None, initializer=init)
-                        upsample2 = x
-                        network = nf.convolution_layer(upsample2, model_params["conv3"], [1,1,1,1], name="conv3", activat_fn=None, initializer=init)
+            with tf.variable_scope("upsamplex2", reuse=reuse):
+                    #upsample2 = nf.upsample(x, 2, feature_size, 3,None, initializer=init)
+                    upsample2 = x
+                    g_network = nf.convolution_layer(upsample2, model_params["conv3"], [1,1,1,1], name="conv3", activat_fn=None, initializer=init)
            
+            g_output = tf.stop_gradient(g_network)
+            
         ###Discriminator
         num_resblock = 4
 
@@ -908,33 +914,36 @@ class model_zoo:
 
                 #d_inputs = network  + 3.0*(network - d_target)
                 #Test 
-                res_gen = network - d_target
-                input_gan = tf.concat([network,res_gen], axis=3)
+                #res_gen = g_output - d_target
+                #input_gan = tf.concat([network,res_gen], axis=3)
+                #input_gan = tf.sign(res_gen) * tf.square(res_gen) # v1
+                #input_gan = tf.square(res_gen) # v2
+                input_gan = g_output
                 #d_inputs = network
             else:
-                res_gen = d_inputs - d_target
-                input_gan = tf.concat([d_inputs, res_gen], axis=3)
-            
-            with tf.device('/gpu:0'):
-                with tf.variable_scope("EDSR_dis", reuse=reuse):     
-                    x = nf.convolution_layer( input_gan, model_params["conv1"], [1,1,1,1], name="conv1",  activat_fn=nf.lrelu, is_bn=True,initializer=init)
-                    conv_1 = x
-                    with tf.variable_scope("resblock", reuse=reuse): 
-                    
-                            #Add the residual blocks to the model
-                            for i in range(num_resblock):
-                                x = nf.resBlock(x,feature_size,scale=scaling_factor, is_bn=True, reuse=reuse, idx = i, activation_fn=nf.lrelu, initializer=init)
-                            x = nf.convolution_layer(x, model_params["conv2"], [1,1,1,1], name="conv2",activat_fn=nf.lrelu,  is_bn=True, initializer=init)
-                            x += conv_1
-                    x = nf.convolution_layer(x, model_params["conv1"], [1,1,1,1], name="conv3",  activat_fn=nf.lrelu, is_bn=True, initializer=init)
-                    d_logits = nf.convolution_layer(x, model_params["d_output"], [1,1,1,1], name="conv4", activat_fn=nf.lrelu, flatten=False, initializer=init)
+                #res_gen = d_inputs - d_target
+                #input_gan = tf.concat([d_inputs, res_gen], axis=3)
+                #input_gan = tf.sign(res_gen) * tf.square(res_gen)
+                #input_gan = tf.square(res_gen) # v2
+                input_gan = d_inputs           
+
+            with tf.variable_scope("EDSR_dis", reuse=reuse):     
+                x = nf.convolution_layer( input_gan, model_params["conv1"], [1,1,1,1], name="conv1",  activat_fn=nf.lrelu, initializer=init)
+                conv_1 = x
+                with tf.variable_scope("resblock", reuse=reuse): 
+                
+                        #Add the residual blocks to the model
+                        for i in range(num_resblock):
+                            x = nf.resBlock(x,feature_size,scale=scaling_factor, reuse=reuse, idx = i, activation_fn=nf.lrelu, initializer=init)
+                        x = nf.convolution_layer(x, model_params["conv2"], [1,1,1,1], name="conv2",activat_fn=nf.lrelu, initializer=init)
+                        x += conv_1
+                x = nf.convolution_layer(x, model_params["conv1"], [1,1,1,1], name="conv3",  activat_fn=nf.lrelu, initializer=init)
+                d_logits = nf.convolution_layer(x, model_params["d_output"], [1,1,1,1], name="conv4", activat_fn=nf.lrelu, flatten=False, initializer=init)
 
         else:
-            d_logits = network
+            d_logits = g_network
   
-        return [network, d_logits]
-
-
+        return [g_network, d_logits]
 
     def edsr_lsgan_up(self, kwargs):
 
@@ -1007,7 +1016,140 @@ class model_zoo:
   
         return [network, d_logits]
 
+#    def EDSR_WGAN_MNIST(self, kwargs):
+#
+#        #init = tf.random_uniform_initializer(minval=-0.05, maxval=0.05, seed=None, dtype=tf.float32)
+#        init = tf.random_normal_initializer(stddev=0.01)
+#        reuse = kwargs["reuse"]
+#        d_inputs = kwargs["d_inputs"]
+#        d_target = kwargs["d_target"]
+#        is_training = kwargs["is_training"]
+#        feature_size = 14
+#        scaling_factor = 1
+#
+#        model_params = {
+#
+#                        'conv1': [3,3,feature_size],
+#                        'resblock': [3,3,feature_size],
+#                        'conv2': [3,3,feature_size],
+#                        'conv3': [3,3,1],
+#                        'd_output': [3,3,1]
+#                        
+#                        }
+#        
+#        ###Generator
+#        num_resblock = 3
+#                   
+#        g_input = self.inputs
+#        
+#        with tf.variable_scope("EDSR_gen", reuse=reuse):     
+#            x = nf.convolution_layer(g_input, model_params["conv1"], [1,1,1,1], name="conv1", activat_fn=None, initializer=init)
+#            conv_1 = x
+#            with tf.variable_scope("resblock",reuse=reuse): 
+#            
+#                    #Add the residual blocks to the model
+#                    for i in range(num_resblock):
+#                        x = nf.resBlock(x,feature_size,scale=scaling_factor, reuse=reuse, idx = i, initializer=init)
+#                    x = nf.convolution_layer(x, model_params["conv2"], [1,1,1,1], name="conv2", activat_fn=None, initializer=init)
+#                    x += conv_1
+#            x = nf.convolution_layer(x, model_params["conv1"], [1,1,1,1], name="conv3",  activat_fn=None, initializer=init)
+#            g_network = nf.convolution_layer(x, model_params["d_output"], [1,1,1,1], name="conv4", activat_fn=None, initializer=init)
+#           
+#            g_output = g_network
+#            
+#        ###Discriminator
+#        num_resblock = 2
+#
+#        if is_training:
+#
+#            if d_inputs == None: 
+#                input_gan = g_output
+#            else:
+#                input_gan = d_inputs           
+#
+#            with tf.variable_scope("EDSR_dis", reuse=reuse):     
+#                x = nf.convolution_layer( input_gan, model_params["conv1"], [1,1,1,1], name="conv1",  activat_fn=nf.lrelu, initializer=init)
+#                conv_1 = x
+#                with tf.variable_scope("resblock", reuse=reuse): 
+#                
+#                        #Add the residual blocks to the model
+#                        for i in range(num_resblock):
+#                            x = nf.resBlock(x,feature_size,scale=scaling_factor, reuse=reuse, idx = i, activation_fn=nf.lrelu, initializer=init)
+#                        x = nf.convolution_layer(x, model_params["conv2"], [1,1,1,1], name="conv2",activat_fn=nf.lrelu, initializer=init)
+#                        x += conv_1
+#                x = nf.convolution_layer(x, model_params["conv1"], [1,1,1,1], name="conv3",  activat_fn=nf.lrelu, initializer=init)
+#                d_logits = nf.convolution_layer(x, model_params["d_output"], [1,1,1,1], name="conv4", activat_fn=nf.lrelu, flatten=False, initializer=init)
+#
+#        else:
+#            d_logits = g_network
+#  
+#        return [g_network, d_logits]
+    
+    def EDSR_WGAN_MNIST(self, kwargs):
 
+        reuse = kwargs["reuse"]
+        d_inputs = kwargs["d_inputs"]
+        d_target = kwargs["d_target"]
+        is_training = kwargs["is_training"]
+        net = kwargs["net"]
+        
+        DEPTH = 28
+        OUTPUT_SIZE = 28
+        batch_size = 64
+
+        if net is "Gen":
+        
+            ###Generator
+            g_input = self.inputs
+            with tf.variable_scope("EDSR_gen", reuse=reuse):     
+
+                noise = g_input
+
+                output = self.fully_connected('g_fc_1', noise, 2*2*8*DEPTH)
+                output = tf.reshape(output, [batch_size, 2, 2, 8*DEPTH], 'g_conv')
+        
+                output = self.deconv2d('g_deconv_1', output, ksize=5, outshape=[batch_size, 4, 4, 4*DEPTH])
+                output = tf.nn.relu(output)
+                output = tf.reshape(output, [batch_size, 4, 4, 4*DEPTH])
+        
+                output = self.deconv2d('g_deconv_2', output, ksize=5, outshape=[batch_size, 7, 7, 2* DEPTH])
+                output = tf.nn.relu(output)
+        
+                output = self.deconv2d('g_deconv_3', output, ksize=5, outshape=[batch_size, 14, 14, DEPTH])
+                output = tf.nn.relu(output)
+        
+                output = self.deconv2d('g_deconv_4', output, ksize=5, outshape=[batch_size, OUTPUT_SIZE, OUTPUT_SIZE, 1])
+                # output = tf.nn.relu(output)
+                output = tf.nn.sigmoid(output)
+                
+                return tf.reshape(output,[-1,784])           
+
+
+        elif net is "Dis":
+            
+            ###Discriminator
+
+            input_gan = d_inputs 
+            with tf.variable_scope("EDSR_dis", reuse=reuse):     
+
+                output = tf.reshape(input_gan, [-1, 28, 28, 1])
+                output1 = self.conv2d('d_conv_1', output, ksize=5, out_dim=DEPTH)
+                output2 = nf.lrelu('d_lrelu_1', output1)
+        
+                output3 = self.conv2d('d_conv_2', output2, ksize=5, out_dim=2*DEPTH)
+                output4 = nf.lrelu('d_lrelu_2', output3)
+        
+                output5 = self.conv2d('d_conv_3', output4, ksize=5, out_dim=4*DEPTH)
+                output6 = nf.lrelu('d_lrelu_3', output5)
+        
+                # output7 = conv2d('d_conv_4', output6, ksize=5, out_dim=8*DEPTH)
+                # output8 = lrelu('d_lrelu_4', output7)
+        
+                chanel = output6.get_shape().as_list()
+                output9 = tf.reshape(output6, [batch_size, chanel[1]*chanel[2]*chanel[3]])
+                output0 = self.fully_connected('d_fc', output9, 1)
+                
+                return output0
 
     def build_model(self, kwargs = {}):
 
@@ -1015,7 +1157,7 @@ class model_zoo:
                       "grr_grid_srcnn_v1","edsr_v1", "espcn_v1","edsr_v2",
                       "edsr_attention_v1", "edsr_1X1_v1", "edsr_local_att_v1",
                       "edsr_local_att_v2_upsample", "edsr_attention_v2", "edsr_v2_dual",
-                      "edsr_lsgan", "edsr_lsgan_up"]
+                      "edsr_lsgan", "edsr_lsgan_up", "EDSR_WGAN_MNIST"]
         
         if self.model_ticket not in model_list:
             print("sorry, wrong ticket!")
@@ -1031,6 +1173,30 @@ class model_zoo:
                 netowrk = fn(kwargs)
             return netowrk
         
+    def conv2d(self, name, tensor,ksize, out_dim, stddev=0.01, stride=2, padding='SAME'):
+        with tf.variable_scope(name):
+            w = tf.get_variable('w', [ksize, ksize, tensor.get_shape()[-1],out_dim], dtype=tf.float32,
+                                initializer=tf.random_normal_initializer(stddev=stddev))
+            var = tf.nn.conv2d(tensor,w,[1,stride, stride,1],padding=padding)
+            b = tf.get_variable('b', [out_dim], 'float32',initializer=tf.constant_initializer(0.01))
+            return tf.nn.bias_add(var, b)
+    
+    def deconv2d(self, name, tensor, ksize, outshape, stddev=0.01, stride=2, padding='SAME'):
+        with tf.variable_scope(name):
+            w = tf.get_variable('w', [ksize, ksize, outshape[-1], tensor.get_shape()[-1]], dtype=tf.float32,
+                                initializer=tf.random_normal_initializer(stddev=stddev))
+            var = tf.nn.conv2d_transpose(tensor, w, outshape, strides=[1, stride, stride, 1], padding=padding)
+            b = tf.get_variable('b', [outshape[-1]], 'float32', initializer=tf.constant_initializer(0.01))
+            return tf.nn.bias_add(var, b)        
+
+    def fully_connected(self, name,value, output_shape):
+        with tf.variable_scope(name, reuse=None) as scope:
+            shape = value.get_shape().as_list()
+            w = tf.get_variable('w', [shape[1], output_shape], dtype=tf.float32,
+                                        initializer=tf.random_normal_initializer(stddev=0.01))
+            b = tf.get_variable('b', [output_shape], dtype=tf.float32, initializer=tf.constant_initializer(0.0))
+    
+            return tf.matmul(value, w) + b
         
 def unit_test():
 

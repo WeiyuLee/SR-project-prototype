@@ -26,7 +26,7 @@ def main(_):
     if not os.path.exists(conf["output_dir"]):
         os.makedirs(conf["output_dir"])
 
-    with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
+    with tf.Session() as sess:
         srcnn = MODEL(sess, 
                       mode=conf["mode"],
                       epoch=conf["epoch"],
@@ -48,7 +48,8 @@ def main(_):
                       test_h5_name=conf["test_h5_name"],
                       ckpt_name=conf["ckpt_name"],
                       is_train=conf["is_train"],
-                      model_ticket=conf["model_ticket"])
+                      model_ticket=conf["model_ticket"],
+                      curr_epoch=conf["curr_epoch"])
 
         if conf["is_train"]:
             srcnn.train()

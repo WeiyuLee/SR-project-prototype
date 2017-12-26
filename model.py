@@ -27,7 +27,7 @@ from utils import (
   laplacian_filter
 )
 
-
+from tensorflow.examples.tutorials.mnist import input_data
 
 
 class MODEL(object):
@@ -53,7 +53,8 @@ class MODEL(object):
                  test_h5_name=None,
                  ckpt_name=None,
                  is_train=True,
-                 model_ticket=None):                 
+                 model_ticket=None,
+                 curr_epoch=0):                 
         """
         Initial function
           
@@ -106,7 +107,9 @@ class MODEL(object):
         self.model_list = ["googleLeNet_v1", "resNet_v1", "srcnn_v1", "grr_srcnn_v1", 
                            "grr_grid_srcnn_v1", "espcn_v1", "edsr_v1","edsr_v2","edsr_attention_v1",
                            "edsr_1X1_v1", "edsr_local_att_v1", "edsr_attention_v2", "edsr_v2_dual",
-                           "edsr_local_att_v2_upsample", "edsr_lsgan","edsr_lsgan_up"]
+                           "edsr_local_att_v2_upsample", "edsr_lsgan","edsr_lsgan_up", "EDSR_WGAN_MNIST"]
+        
+        self.curr_epoch = curr_epoch
         
         self.build_model()        
     
@@ -1416,11 +1419,14 @@ class MODEL(object):
             elif lrtype == 'all':
                 lr_subpath.append(sub_path + "_LR_bicubic/" + "X" + str(self.scale))
                 lr_subpath.append(sub_path + "_LR_unknown/" + "X" + str(self.scale))
+            if lrtype == 'baseline':
+                lr_subpath.append(sub_path + "_LR_bicubic_baseline/" + "X" + str(self.scale))               
             else:
                 #print("lrtype error: [{}]".format(lrtype))
                 return  0
 
             HR_path = os.path.join(dataset_path, sub_path + "_HR")
+#            HR_path = os.path.join(dataset_path, sub_path + "_HR_baseline_enhance")
             hr_imgs = os.listdir(HR_path)
             hr_imgs = [os.path.join(HR_path, hr_imgs[i]) for i in range(len(hr_imgs))]
 
@@ -1438,7 +1444,14 @@ class MODEL(object):
             #for i in range(len(images)//2):
             lr_imgs.append([os.path.join(dataset_path, "img_"+str(i+1)+"_SRF_" + str(self.scale)+"_LR.png") for i in range(len(images)//2)])
             hr_imgs = ([os.path.join(dataset_path, "img_"+str(i+1)+"_SRF_"+ str(self.scale)+"_HR.png")  for i in range(len(images)//2)])
-        
+
+        elif type == "test_baseline":
+
+            lr_imgs = []
+            images = os.listdir(dataset_path)
+            #for i in range(len(images)//2):
+            lr_imgs.append([os.path.join(dataset_path, "img_"+str(i+1)+"_SRF_1_LR.png") for i in range(len(images)//2)])
+            hr_imgs = ([os.path.join(dataset_path, "img_"+str(i+1)+"_SRF_1_HR.png")  for i in range(len(images)//2)])       
            
         hr_list = []
         lr_list = []
@@ -2222,13 +2235,18 @@ class MODEL(object):
         # Initial model_zoo
         mz = model_zoo.model_zoo(self.image_input, self.dropout, self.is_train, self.model_ticket)
         
-        # Build model
-        _, dis_t = mz.build_model({"d_inputs":self.target,"d_target":self.target,"scale":self.scale,"feature_size" :64,"reuse":False, "is_training":True})
-        gen_f, dis_f = mz.build_model({"d_inputs":None,"d_target":self.target,"scale":self.scale,"feature_size" :64, "reuse":True, "is_training":True})
-
+        ### Build model
+        # d_inputs: discriminator's input image, if d_inputs == None, use generator's output as d_inputs.
+        # d_target: discriminator's target image.
         
-
-        #Calculate gradient panalty
+        # dis_t: output of the discriminator (input: true image)
+        _, dis_t = mz.build_model({"d_inputs":self.target, "d_target":self.target, "scale":self.scale, "feature_size" :64, "reuse":False, "is_training":True})
+        
+        # gen_f: output of the generator (input: fake image)
+        # dis_t: output of the discriminator (input: fake image)
+        gen_f, dis_f = mz.build_model({"d_inputs":None, "d_target":self.target, "scale":self.scale, "feature_size" :64, "reuse":True, "is_training":True})
+        
+        # Calculate gradient penalty
         self.epsilon = epsilon = tf.random_uniform([], 0.0, 1.0)
         x_hat = epsilon * self.target + (1. - epsilon) * (gen_f)
         _, d_hat = mz.build_model({"d_inputs":x_hat,"d_target":self.target,"scale":self.scale,"feature_size" :64, "reuse":True, "is_training":True})
@@ -2236,14 +2254,21 @@ class MODEL(object):
         d_gp = tf.gradients(d_hat, [x_hat])[0]
         d_gp = tf.sqrt(tf.reduce_sum(tf.square(d_gp), axis=[1,2,3]))
         d_gp = tf.reduce_mean(tf.square(d_gp - 1.0)) * 10
+#        d_gp = tf.reduce_mean(tf.square(d_gp - 1.0)) * 0.1
 
         self.disc_ture_loss = disc_ture_loss = tf.reduce_mean(dis_t)
-        disc_fake_loss = tf.reduce_mean(dis_f)
+        self.disc_fake_loss = disc_fake_loss = tf.reduce_mean(dis_f)
 
+#        reconstucted_weight = 0.1  #StarGAN is 10
         reconstucted_weight = 1.0  #StarGAN is 10
+        
+        # W(P_data, P_G) = min{ E_x~P_G[D(x)] - E_x~P_data[D(x)] + lamda*E_x~P_penalty[(D'(x)-1)^2] } ~ max{ V(G,D) }
         self.d_loss =   disc_fake_loss - disc_ture_loss + d_gp
-        self.g_l1loss = tf.reduce_mean(tf.losses.absolute_difference(target,gen_f))
+        
+        # Generator loss
+        self.g_l1loss = tf.reduce_mean(tf.losses.absolute_difference(target, gen_f))
         self.g_loss =  -1.0*disc_fake_loss + reconstucted_weight*self.g_l1loss
+
         
         """
         #Genric GAN Loss
@@ -2257,9 +2282,9 @@ class MODEL(object):
         discriminator_variables = [v for v in train_variables if v.name.startswith("EDSR_dis")]
         self.train_d = tf.train.AdamOptimizer(self.lr, beta1=0.5, beta2=0.999).minimize(self.d_loss, var_list=discriminator_variables)
         self.train_g = tf.train.AdamOptimizer(self.lr, beta1=0.5, beta2=0.999).minimize(self.g_loss, var_list=generator_variables)
-        self.train_l1 = tf.train.AdamOptimizer(self.lr,beta1=0.5, beta2=0.999).minimize(self.g_l1loss, var_list=generator_variables)
-        
-
+#        self.train_l1 = tf.train.AdamOptimizer(self.lr,beta1=0.5, beta2=0.999).minimize(self.g_l1loss, var_list=generator_variables)
+ 
+       
         """
         train_variables = tf.trainable_variables()
         discriminator_variables = [v for v in train_variables if v.name.startswith("EDSR_dis")]
@@ -2345,8 +2370,8 @@ class MODEL(object):
         #dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/DIV2K_fake/", lrtype='bicubic', type='train')
 
         #96X96
-        test_dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/Set5/validation96_scale_"+"2"+"/",type="test")
-        dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/DIV2K_base/", lrtype='bicubic', type='train')
+        test_dataset = self.load_divk("/home/wei/ML/dataset/SuperResolution/Set5/validation_model/", type="test_baseline")
+        dataset = self.load_divk("/home/wei/ML/dataset/SuperResolution/DIV2K/", lrtype='baseline', type='train')
 
         #48X48
         #test_dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/Set5/validation_scale_"+ str(self.scale),type="test")
@@ -2369,10 +2394,17 @@ class MODEL(object):
         
         # Define iteration counter, timer and average loss
         itera_counter = 0
-        learning_rate = 1e-4
-        #train_batch_num = len(train_data) // self.batch_size
+        
+        train_data, train_label  = zip(*dataset)
+        itr_per_epoch = len(train_data)//self.batch_size 
+        if (self.curr_epoch*itr_per_epoch//200000) != 0:
+            learning_rate = self.learning_rate // (2**(self.curr_epoch*itr_per_epoch//200000))
+        else:
+            learning_rate = self.learning_rate
+        print("Current learning rate: [{}]".format(learning_rate))
+        
 
-        epoch_pbar = tqdm(range(0,self.epoch))
+        epoch_pbar = tqdm(range(self.curr_epoch, self.epoch))
         for ep in epoch_pbar:            
             # Run by batch images
             random.shuffle(dataset) 
@@ -2384,75 +2416,91 @@ class MODEL(object):
         
             batch_pbar = tqdm(range(0, len(train_data)//self.batch_size), desc="Batch: [0]")
             
-            action = 0
-            cycle_times = 1000
-            current_cycle = ep%cycle_times
-
-            if current_cycle < 1000:
-                action = 2
-            elif current_cycle >= 1000 and current_cycle < 50000:
-                action = 2
-            elif current_cycle >= 50000:
-                action = 2
+#            action = 0
+#            cycle_times = 1000
+#            current_cycle = ep%cycle_times
+#
+#            if current_cycle < 1000:
+#                action = 2
+#            elif current_cycle >= 1000 and current_cycle < 50000:
+#                action = 2
+#            elif current_cycle >= 50000:
+#                action = 2
 
             itr_per_epoch = len(train_data)//self.batch_size 
-            if (ep*itr_per_epoch)%300000 == 0 and ep*itr_per_epoch != 0:learning_rate = learning_rate/2
+            if (ep*itr_per_epoch)%200000 == 0 and ep*itr_per_epoch != 0:
+                learning_rate = learning_rate/2
+                print("Current learning rate: [{}]".format(learning_rate))
 
             for idx in batch_pbar:                
-                batch_pbar.set_description("Batch: [%2d], Action: [%d]" % ((idx+1) ,action))
+#                batch_pbar.set_description("Batch: [%2d], Action: [%d]" % ((idx+1) ,action))
+                batch_pbar.set_description("Batch: [%2d]" % ((idx+1)))
                 itera_counter += 1
                 batch_index = idx*self.batch_size 
                 #batch_images, batch_labels = batch_shuffle_rndc(train_data, train_label, self.scale, self.image_size,batch_index, self.batch_size)
                 start_time = time.time()
                 batch_images, batch_labels = batch_shuffle_rndc(train_data, train_label, 1, self.image_size*2,batch_index, self.batch_size)
                 elapse = time.time() - start_time
-                print("batch elapse:", elapse)
+                #print("batch elapse:", elapse)
                 # Select different action each cycle time
 
                 start_time = time.time()
-                if action == 0:
-                    
-                    self.sess.run(self.train_l1,
-                                             feed_dict={self.input: batch_images,
-                                                        self.image_target: batch_labels,
-                                                        self.dropout: 1.,
-                                                        self.lr:learning_rate})
+#                if action == 0:
+#                    
+#                    self.sess.run(self.train_l1,
+#                                             feed_dict={self.input: batch_images,
+#                                                        self.image_target: batch_labels,
+#                                                        self.dropout: 1.,
+#                                                        self.lr:learning_rate})
+#
+#                elif action == 1:
+#
+#                    
+#                    self.sess.run([self.train_d, self.d_loss],
+#                                                 feed_dict={self.input: batch_images,
+#                                                            self.image_target: batch_labels,
+#                                                            self.dropout: 1.,
+#                                                            self.lr:1e-4})
+#                    #self.sess.run(self.clip_discriminator_var_op)
+#                          
+#
+#                elif action == 2:
+#
+#                    
+#                    if idx%5 == 0:
+#                    
+#                        t = self.sess.run([self.train_g],
+#                                                 feed_dict={self.input: batch_images,
+#                                                            self.image_target: batch_labels,
+#                                                            self.dropout: 1.,
+#                                                            self.lr:learning_rate})
+#                       
+#                    
+#                    _, loss = self.sess.run([self.train_d, self.d_loss],
+#                                             feed_dict={self.input: batch_images,
+#                                                        self.image_target: batch_labels,
+#                                                        self.dropout: 1.,
+#                                                        self.lr:learning_rate})
+#                    #self.sess.run(self.clip_discriminator_var_op)
 
-                elif action == 1:
-
-                    
-                    self.sess.run([self.train_d, self.d_loss],
-                                                 feed_dict={self.input: batch_images,
-                                                            self.image_target: batch_labels,
-                                                            self.dropout: 1.,
-                                                            self.lr:1e-4})
-                    #self.sess.run(self.clip_discriminator_var_op)
-                          
-
-                elif action == 2:
-
-                    
-                    if idx%5 == 0:
-                    
-                        t = self.sess.run([self.train_g],
-                                                 feed_dict={self.input: batch_images,
-                                                            self.image_target: batch_labels,
-                                                            self.dropout: 1.,
-                                                            self.lr:learning_rate})
-                       
-                    
+                for d_iter in range(0, 5):
                     _, loss = self.sess.run([self.train_d, self.d_loss],
                                              feed_dict={self.input: batch_images,
                                                         self.image_target: batch_labels,
                                                         self.dropout: 1.,
                                                         self.lr:learning_rate})
-                    #self.sess.run(self.clip_discriminator_var_op)
+                   
+                t = self.sess.run([self.train_g],
+                                         feed_dict={self.input: batch_images,
+                                                    self.image_target: batch_labels,
+                                                    self.dropout: 1.,
+                                                    self.lr:learning_rate})                                
 
                 elapse = time.time() - start_time 
-                print("training elapse:", elapse)           
+                #print("training elapse:", elapse)           
                 #batch_pbar.refresh()
               
-            if ep % 50 == 1:
+            if ep % 50 == 0 and ep != 0:
                 self.save_ckpt(self.checkpoint_dir, self.ckpt_name, itera_counter)
                 train_sum = self.sess.run(self.merged_summary_train, 
                                                                         feed_dict={
@@ -2707,3 +2755,156 @@ class MODEL(object):
                 
                 summary_writer.add_summary(train_sum, ep)
                 summary_writer.add_summary(test_sum, ep)
+                
+    def build_EDSR_WGAN_MNIST(self):###
+        """
+        Build SRCNN model
+        """        
+        # Define input and label images
+        self.image_input = tf.random_normal([self.batch_size, 128], name='input')  
+        self.image_target = tf.placeholder(tf.float32, [self.batch_size, self.image_size*self.image_size*self.color_dim], name='labels')
+
+        self.dropout = tf.placeholder(tf.float32, name='dropout')
+        self.lr = tf.placeholder(tf.float32, name='learning_rate')
+        
+        # Initial model_zoo
+        mz = model_zoo.model_zoo(self.image_input, self.dropout, self.is_train, self.model_ticket)
+        
+        ### Build model       
+        gen_f = mz.build_model({"d_inputs":None, "d_target":self.image_target, "scale":self.scale, "feature_size" :64, "reuse":False, "is_training":True, "net":"Gen"})
+        dis_t = mz.build_model({"d_inputs":self.image_target, "d_target":self.image_target, "scale":self.scale, "feature_size" :64, "reuse":False, "is_training":True, "net":"Dis"})
+        dis_f = mz.build_model({"d_inputs":gen_f, "d_target":self.image_target, "scale":self.scale, "feature_size" :64, "reuse":True, "is_training":True, "net":"Dis"})
+
+        # Calculate gradient penalty
+        self.epsilon = epsilon = tf.random_uniform([self.batch_size, 1], 0.0, 1.0)
+        x_hat = epsilon * self.image_target + (1. - epsilon) * (gen_f)
+        d_hat = mz.build_model({"d_inputs":x_hat,"d_target":self.image_target,"scale":self.scale,"feature_size" :64, "reuse":True, "is_training":True, "net":"Dis"})
+        
+        d_gp = tf.gradients(d_hat, [x_hat])[0]
+        d_gp = tf.sqrt(tf.reduce_sum(tf.square(d_gp), reduction_indices=[1]))
+        d_gp = tf.reduce_mean((d_gp - 1.0)**2) * 10
+
+        self.disc_ture_loss = disc_ture_loss = tf.reduce_mean(dis_t)
+        self.disc_fake_loss = disc_fake_loss = tf.reduce_mean(dis_f)
+        
+        # W(P_data, P_G) = min{ E_x~P_G[D(x)] - E_x~P_data[D(x)] + lamda*E_x~P_penalty[(D'(x)-1)^2] } ~ max{ V(G,D) }
+        self.d_loss =   disc_fake_loss - disc_ture_loss + d_gp
+        
+        # Generator loss
+        self.g_loss = -1.0*disc_fake_loss
+
+        train_variables = tf.trainable_variables()
+        generator_variables = [v for v in train_variables if v.name.startswith("EDSR_gen")]
+        discriminator_variables = [v for v in train_variables if v.name.startswith("EDSR_dis")]
+        self.train_d = tf.train.AdamOptimizer(self.lr, beta1=0.5, beta2=0.9).minimize(self.d_loss, var_list=discriminator_variables)
+        self.train_g = tf.train.AdamOptimizer(self.lr, beta1=0.5, beta2=0.9).minimize(self.g_loss, var_list=generator_variables)
+        
+        self.g_output = gen_f
+        
+        with tf.name_scope('train_summary'):
+            
+            tf.summary.scalar("d_loss", self.d_loss, collections=['train'])
+            tf.summary.scalar("g_loss", self.g_loss, collections=['train'])
+            tf.summary.scalar("d_true_loss", disc_ture_loss, collections=['train'])
+            tf.summary.scalar("d_fake_loss", disc_fake_loss, collections=['train'])
+            tf.summary.scalar("grad_loss", d_gp, collections=['train'])
+            tf.summary.scalar("dis_f_mean", tf.reduce_mean(dis_f), collections=['train'])
+            tf.summary.scalar("dis_t_mean", tf.reduce_mean(dis_t), collections=['train'])
+            tf.summary.image("target_image", tf.reshape(self.image_target, [self.batch_size, self.image_size, self.image_size, self.color_dim]), collections=['train'])
+            tf.summary.image("output_image", tf.reshape(gen_f, [self.batch_size, self.image_size, self.image_size, self.color_dim]), collections=['train'])
+    
+            self.merged_summary_train = tf.summary.merge_all('train')          
+
+        with tf.name_scope('test_summary'):
+
+            tf.summary.scalar("d_loss", self.d_loss, collections=['test'])
+            tf.summary.scalar("g_loss", self.g_loss, collections=['test'])
+            tf.summary.image("target_image", tf.reshape(self.image_target, [self.batch_size, self.image_size, self.image_size, self.color_dim]), collections=['test'])
+            tf.summary.image("output_image", tf.reshape(gen_f, [self.batch_size, self.image_size, self.image_size, self.color_dim]), collections=['test'])
+        
+            self.merged_summary_test = tf.summary.merge_all('test')                 
+        
+        self.saver = tf.train.Saver()
+
+        
+    def train_EDSR_WGAN_MNIST(self):
+        """
+        Training process.
+        """     
+        print("Training...")
+
+        # Define dataset path
+        mnist = input_data.read_data_sets("/home/wei/ML/dataset/MNIST_data/", one_hot=True)
+        print("...")
+        log_dir = os.path.join(self.log_dir, self.ckpt_name, "log")
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+        summary_writer = tf.summary.FileWriter(log_dir, self.sess.graph)    
+    
+        self.sess.run(tf.global_variables_initializer())
+
+        if self.load_ckpt(self.checkpoint_dir, self.ckpt_name):
+            print(" [*] Load SUCCESS")
+        else:
+            print(" [!] Load failed...")       
+        
+        # Define iteration counter, learning rate...
+        itera_counter = 0
+        learning_rate = self.learning_rate
+
+        epoch_pbar = tqdm(range(self.curr_epoch, self.epoch))
+        for ep in epoch_pbar:            
+            # Run by batch images
+            idxs = 1000
+
+            epoch_pbar.set_description("Epoch: [%2d], lr:%f" % ((ep+1), learning_rate))
+            epoch_pbar.refresh()
+        
+            batch_pbar = tqdm(range(0, idxs), desc="Batch: [0]")
+
+            for idx in batch_pbar:                
+                batch_pbar.set_description("Batch: [%2d]" % ((idx+1)))
+                itera_counter += 1
+                
+                mnist_img, _ = mnist.train.next_batch(self.batch_size)
+                                  
+                for d_iter in range(0, 5):
+                    _, d_loss, g_loss \
+                    = self.sess.run([self.train_d, self.d_loss, self.g_loss],
+                                                                             feed_dict={   
+                                                                                         self.image_target: mnist_img,
+                                                                                         self.dropout: 1.,
+                                                                                         self.lr:learning_rate
+                                                                                       })
+                
+                _ = self.sess.run([self.train_g], 
+                                                   feed_dict={
+                                                               self.image_target: mnist_img,
+                                                               self.dropout: 1.,
+                                                               self.lr:learning_rate 
+                                                             })
+            
+            print("EP:[{}], d_loss = [{}], g_loss = [{}]\n".format(ep, d_loss, g_loss))
+    
+            if ep % 5 == 0 and ep != 0:
+                self.save_ckpt(self.checkpoint_dir, self.ckpt_name, itera_counter)
+                
+                train_sum = self.sess.run(self.merged_summary_train, 
+                                                                    feed_dict={
+                                                                                self.image_target: mnist_img,
+                                                                                self.dropout: 1.
+                                                                              })
+                
+                test_sum, g_output = self.sess.run([self.merged_summary_test, self.g_output],
+                                                                     feed_dict={
+                                                                                 self.image_target: mnist_img,
+                                                                                 self.dropout: 1.,
+                                                                               })
+                                                                                                   
+                
+                                                                     
+                print("Epoch: [{}]".format((ep+1)))       
+                
+                
+                summary_writer.add_summary(train_sum, ep)
+                summary_writer.add_summary(test_sum, ep)                
