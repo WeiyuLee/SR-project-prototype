@@ -1452,7 +1452,7 @@ class MODEL(object):
            lr_list.append(misc.imread(lr_imgs[0][i]))
            if lrtype == 'all':
             lr_list2.append(misc.imread(lr_imgs[1][i]))
-           #if lrtype == 'bicubic' and i > 20: break
+           #if lrtype == 'all' and i > 20: break
 
         print("[load_divk] type: [{}], lrtype: [{}]".format(type, lrtype))
         print("[load_divk] HR images number: [{}]".format(len(hr_list)))
@@ -2539,7 +2539,7 @@ class MODEL(object):
         reconstucted_weight = 1.0  #StarGAN is 10
         self.d_loss =   disc_fake_loss - disc_ture_loss
         self.g_l1loss = tf.reduce_mean(tf.losses.absolute_difference(target,gen_f))
-        self.g_loss =  -1.0*disc_fake_loss + reconstucted_weight*self.g_l1loss
+        self.g_loss =  -50.0*disc_fake_loss + reconstucted_weight*self.g_l1loss
         
         
         train_variables = tf.trainable_variables()
@@ -2655,7 +2655,7 @@ class MODEL(object):
             batch_pbar = tqdm(range(0, len(train_data)//self.batch_size), desc="Batch: [0]")
             
             action = 0
-            cycle_times = 100000
+            cycle_times = 10000000
             current_cycle = ep%cycle_times
 
             if current_cycle < 20000:
@@ -2712,7 +2712,7 @@ class MODEL(object):
                                                             self.image_target: batch_labels,
                                                             self.dropout: 1.,
                                                             self.lr:learning_rate})
-                    #self.sess.run(self.clip_discriminator_var_op)
+                    self.sess.run(self.clip_discriminator_var_op)
 
                               
                 #batch_pbar.refresh()
