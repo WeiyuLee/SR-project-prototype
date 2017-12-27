@@ -548,7 +548,7 @@ class config:
 		train_config["h5_dir"] = "/home/ubuntu/dataset/SuperResolution/train" # Name of train dataset .h5 file
 		train_config["train_h5_name"] = "train" # Name of train dataset .h5 file
 		train_config["test_h5_name"] = "test" # Name of test dataset .h5 file
-		train_config["ckpt_name"] = "edsr_lsgan_up_aux_v2" # Name of checkpoints
+		train_config["ckpt_name"] = "edsr_lsgan_up_pretrain" # Name of checkpoints
 		train_config["is_train"] = True # True for training, False for testing [True]
 		train_config["model_ticket"] = "edsr_lsgan_up" # Name of checkpoints
 
@@ -604,7 +604,7 @@ class config:
 		train_config["h5_dir"] = "/home/ubuntu/dataset/SuperResolution/train" # Name of train dataset .h5 file
 		train_config["train_h5_name"] = "train" # Name of train dataset .h5 file
 		train_config["test_h5_name"] = "test" # Name of test dataset .h5 file
-		train_config["ckpt_name"] = "edsr_lsgan_up_glossw100" # Name of checkpoints
+		train_config["ckpt_name"] = "edsr_lsgan_up_pretrain_v1" # Name of checkpoints
 		train_config["is_train"] = True # True for training, False for testing [True]
 		train_config["model_ticket"] = "edsr_lsgan_up" # Name of checkpoints
 

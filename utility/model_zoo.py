@@ -956,7 +956,7 @@ class model_zoo:
         is_generate = kwargs["is_generate"]
         feature_size = 64
         scaling_factor = 1
-        num_resblock = 4
+        num_resblock = 8
             
         model_params = {
 

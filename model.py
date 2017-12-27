@@ -2506,6 +2506,7 @@ class MODEL(object):
         _, dis_t = mz.build_model({"d_inputs":self.target,"d_target":self.target,"scale":self.scale,"feature_size" :64,"reuse":True, "is_training":True,"is_generate":False})
         
         #Calculate gradient panalty
+        """
         self.epsilon = epsilon = tf.random_uniform([], 0.0, 1.0)
         x_hat = epsilon * self.target + (1. - epsilon) * (gen_f)
         _, d_hat = mz.build_model({"d_inputs":x_hat,"d_target":self.target,"scale":self.scale,"feature_size" :64, "reuse":True, "is_training":True,"is_generate":False})
@@ -2522,13 +2523,47 @@ class MODEL(object):
         self.g_l1loss = tf.reduce_mean(tf.losses.absolute_difference(target,gen_f))
         self.g_loss =  -100.0*disc_fake_loss + reconstucted_weight*self.g_l1loss  #Test weight to 100, original is 1.0
         
-
         train_variables = tf.trainable_variables()
         generator_variables = [v for v in train_variables if v.name.startswith("EDSR_gen")]
         discriminator_variables = [v for v in train_variables if v.name.startswith("EDSR_dis")]
         self.train_d = tf.train.AdamOptimizer(self.lr, beta1=0.5, beta2=0.999).minimize(self.d_loss, var_list=discriminator_variables)
         self.train_g = tf.train.AdamOptimizer(self.lr, beta1=0.5, beta2=0.999).minimize(self.g_loss, var_list=generator_variables)
         self.train_l1 = tf.train.AdamOptimizer(self.lr,beta1=0.5, beta2=0.999).minimize(self.g_l1loss, var_list=generator_variables)
+        
+        """
+
+        ######## WGAN #######
+        self.disc_ture_loss = disc_ture_loss = tf.reduce_mean(dis_t)
+        disc_fake_loss = tf.reduce_mean(dis_f)
+
+        reconstucted_weight = 1.0  #StarGAN is 10
+        self.d_loss =   disc_fake_loss - disc_ture_loss
+        self.g_l1loss = tf.reduce_mean(tf.losses.absolute_difference(target,gen_f))
+        self.g_loss =  -1.0*disc_fake_loss + reconstucted_weight*self.g_l1loss
+        
+        
+        train_variables = tf.trainable_variables()
+        generator_variables = [v for v in train_variables if v.name.startswith("EDSR_gen")]
+        discriminator_variables = [v for v in train_variables if v.name.startswith("EDSR_dis")]
+        
+        self.clip_discriminator_var_op = [var.assign(tf.clip_by_value(var, -0.01, 0.01)) for
+                                var in discriminator_variables]
+
+        
+        alpha = 0.00005
+        optimizer = tf.train.RMSPropOptimizer(self.lr)
+        gvs_d = optimizer.compute_gradients(self.d_loss, var_list=discriminator_variables)
+        gvs_g = optimizer.compute_gradients(self.g_loss, var_list=generator_variables)
+        gvs_gl1 = optimizer.compute_gradients(self.g_l1loss, var_list=generator_variables)
+       
+        wgvs_d = [(grad*alpha, var) for grad, var in gvs_d]
+        wgvs_g = [(grad*alpha, var) for grad, var in gvs_g]
+        wgvs_gl1 = [(grad*alpha, var) for grad, var in gvs_g]
+
+    
+        self.train_d = optimizer.apply_gradients(wgvs_d)
+        self.train_g = optimizer.apply_gradients(wgvs_g)
+        self.train_l1 = optimizer.apply_gradients(wgvs_gl1)
         
 
         #calculate discriminator accuracy
@@ -2544,7 +2579,7 @@ class MODEL(object):
             tf.summary.scalar("d_loss", self.d_loss, collections=['train'])
             tf.summary.scalar("d_true_loss", disc_ture_loss, collections=['train'])
             tf.summary.scalar("d_fake_loss", disc_fake_loss, collections=['train'])
-            tf.summary.scalar("grad_loss", d_gp, collections=['train'])
+            #tf.summary.scalar("grad_loss", d_gp, collections=['train'])
             tf.summary.scalar("MSE", mse, collections=['train'])
             tf.summary.scalar("PSNR",PSNR, collections=['train'])
             tf.summary.image("input_image",self.input , collections=['train'])
@@ -2620,11 +2655,11 @@ class MODEL(object):
             batch_pbar = tqdm(range(0, len(train_data)//self.batch_size), desc="Batch: [0]")
             
             action = 0
-            cycle_times = 10000
+            cycle_times = 100000
             current_cycle = ep%cycle_times
 
-            if current_cycle < 1000:
-                action = 2
+            if current_cycle < 20000:
+                action = 0
             elif current_cycle >= 1000 and current_cycle < 5000:
                 action = 2
             elif current_cycle >= 5000:
