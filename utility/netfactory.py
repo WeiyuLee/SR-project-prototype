@@ -12,7 +12,8 @@ import utility as ut
 def lrelu(x, name = "leaky", alpha = 0.2):
 
     with tf.variable_scope(name):
-        leaky = tf.nn.relu(x) - alpha * tf.nn.relu(-x)
+        leaky = tf.maximum(x, alpha * x, name=name)
+        #leaky = tf.nn.relu(x) - alpha * tf.nn.relu(-x)
     return leaky
 
 def batchnorm(input, index = 0, reuse = False):
