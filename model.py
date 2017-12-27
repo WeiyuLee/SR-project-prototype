@@ -2666,7 +2666,7 @@ class MODEL(object):
                 action = 2
 
             itr_per_epoch = len(train_data)//self.batch_size 
-            if (ep*itr_per_epoch)%300000 == 0 and ep*itr_per_epoch != 0:learning_rate = learning_rate/2
+            if (ep*itr_per_epoch)%300000 == 0 and ep*itr_per_epoch > 25000:learning_rate = learning_rate/2
 
             for idx in batch_pbar:                
                 batch_pbar.set_description("Batch: [%2d], Action: [%d]" % ((idx+1) ,action))
