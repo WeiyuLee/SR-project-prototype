@@ -8,7 +8,10 @@ sys.path.append('./utility')
 #import cifar10
 import utility as ut
 
-
+def max_pool_layer(inputs, kernel_shape, stride, name=None, padding='VALID'):
+          
+    return tf.nn.max_pool(inputs, kernel_shape, stride, padding, name=name)
+    
 def lrelu(x, name = "leaky", alpha = 0.2):
 
     with tf.variable_scope(name):
@@ -29,9 +32,10 @@ def batchnorm(input, index = 0, reuse = False):
         normalized = tf.nn.batch_normalization(input, mean, variance, offset, scale, variance_epsilon=variance_epsilon)
     return normalized
 
-def convolution_layer(inputs, kernel_shape, stride, name, flatten = False ,padding = 'SAME',initializer=tf.contrib.layers.xavier_initializer(), activat_fn=tf.nn.relu, is_bn=False):
+def convolution_layer(inputs, kernel_shape, stride, name, pre_shape = None, flatten = False ,padding = 'SAME',initializer=tf.contrib.layers.xavier_initializer(), activat_fn=tf.nn.relu, is_bn=False):
                                                                                             #initializer=tf.contrib.layers.xavier_initializer()
-    pre_shape = inputs.get_shape()[-1]
+    
+    if pre_shape == None: pre_shape = inputs.get_shape()[-1]
     rkernel_shape = [kernel_shape[0], kernel_shape[1], pre_shape, kernel_shape[2]]     
     
     with tf.variable_scope(name) as scope:

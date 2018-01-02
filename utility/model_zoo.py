@@ -872,7 +872,7 @@ class model_zoo:
         is_training = kwargs["is_training"]
         feature_size = 64
         scaling_factor = 1
-        num_resblock = 4
+        num_resblock = 8
             
         model_params = {
 
@@ -900,7 +900,7 @@ class model_zoo:
                     network = nf.convolution_layer(upsample2, model_params["conv3"], [1,1,1,1], name="conv3", activat_fn=None, initializer=init)
        
         ###Discriminator
-        num_resblock = 4
+        num_resblock = 0
 
         if is_training:
 
@@ -1015,6 +1015,214 @@ class model_zoo:
         return [network, d_logits]
 
 
+    def edsr_wgan_encode(self, kwargs):
+
+        ###Generator
+        init = tf.random_uniform_initializer(minval=-0.05, maxval=0.05, seed=None, dtype=tf.float32)
+        scale = kwargs["scale"]
+        reuse = kwargs["reuse"]
+        d_inputs = kwargs["d_inputs"]
+        d_target = kwargs["d_target"]
+        is_training = kwargs["is_training"]
+        feature_size = 64
+        scaling_factor = 1
+        num_resblock = 4
+
+        model_params = {
+
+                        'conv1': [3,3,feature_size],
+                        'resblock': [3,3,feature_size],
+                        'conv2': [3,3,2*feature_size],
+                        'conv2_2': [3,3,4*feature_size],
+                        'conv3': [3,3,3],
+                        'd_output': [3,3,3]
+                        }
+            
+        
+        
+        with tf.variable_scope("EDSR_gen", reuse=reuse):
+            with tf.variable_scope("encoder", reuse=reuse):     
+                x = nf.convolution_layer(self.inputs, model_params["conv1"], [1,1,1,1], name="conv1_1", activat_fn=None, initializer=init)
+                x = nf.convolution_layer(x, model_params["conv1"], [1,1,1,1], name="conv1_2", activat_fn=None, initializer=init)
+                x = tf.nn.max_pool(x, ksize=[1,2,2,1],strides = [1,2,2,1], padding='VALID', name="pool1")
+                x = nf.convolution_layer(x, model_params["conv2"], [1,1,1,1], name="conv2", activat_fn=nf.lrelu, initializer=init)
+                x = tf.nn.max_pool(x, ksize=[1,2,2,1],strides = [1,2,2,1], padding='VALID', name="pool2")
+                x = nf.convolution_layer(x, model_params["conv2_2"], [1,1,1,1], name="conv3", activat_fn=nf.lrelu, initializer=init)
+            
+            with tf.variable_scope("decoder", reuse=reuse):     
+                x = nf.convolution_layer(x, model_params["conv2_2"], [1,1,1,1], name="d_conv3", activat_fn=nf.lrelu, initializer=init)
+                W_d_conv1 = tf.get_variable("w_d_conv1", [3,3,256,256], tf.float32, initializer= init)
+
+                output_shape_d_conv1 = tf.stack([tf.shape(x)[0], 48, 48, 256])
+                x = tf.nn.conv2d_transpose(x, W_d_conv1, output_shape_d_conv1, [1, 2, 2, 1], name="upsample1")
+                print(output_shape_d_conv1)
+                
+                x = nf.convolution_layer(x, model_params["conv2"], [1,1,1,1], pre_shape = 256, name="d_conv2", activat_fn=nf.lrelu, initializer=init)
+                
+                W_d_conv2 = tf.get_variable("w_d_conv2", [3,3,64,128], tf.float32, initializer= init)
+                output_shape_d_conv2 = tf.stack([tf.shape(x)[0], 96, 96, 64])
+                x = tf.nn.conv2d_transpose(x, W_d_conv2, output_shape_d_conv2, [1, 2, 2, 1], name="upsample2")
+                
+                #x = nf.upsample(x, 2, feature_size, 3,None, initializer=init)
+                network = nf.convolution_layer(x, model_params["conv3"], [1,1,1,1], pre_shape = 64, name="d_conv1", activat_fn=None, initializer=init)
+               
+            
+       
+        ###Discriminator
+        num_resblock = 0
+
+        model_params = {
+
+                        'conv1': [3,3,feature_size],
+                        'resblock': [3,3,feature_size],
+                        'conv2': [3,3,feature_size],
+                        'conv3': [3,3,3],
+                        'd_output': [3,3,3]
+                        }
+
+        if is_training:
+
+            if d_inputs == None: 
+
+                #d_inputs = network  + 3.0*(network - d_target)
+                #Test 
+                res_gen = network - d_target
+                input_gan = tf.concat([network,res_gen], axis=3)
+                #d_inputs = network
+            else:
+                res_gen = d_inputs - d_target
+                input_gan = tf.concat([d_inputs, res_gen], axis=3)
+            
+            
+            with tf.variable_scope("EDSR_dis", reuse=reuse):     
+                x = nf.convolution_layer( input_gan, model_params["conv1"], [1,1,1,1], name="conv1",  activat_fn=nf.lrelu, is_bn=True,initializer=init)
+                conv_1 = x
+                with tf.variable_scope("resblock", reuse=reuse): 
+                
+                        #Add the residual blocks to the model
+                        for i in range(num_resblock):
+                            x = nf.resBlock(x,feature_size,scale=scaling_factor, is_bn=True, reuse=reuse, idx = i, activation_fn=nf.lrelu, initializer=init)
+                        x = nf.convolution_layer(x, model_params["conv2"], [1,1,1,1], name="conv2",activat_fn=nf.lrelu,  is_bn=True, initializer=init)
+                        x += conv_1
+                x = nf.convolution_layer(x, model_params["conv1"], [1,1,1,1], name="conv3",  activat_fn=nf.lrelu, is_bn=True, initializer=init)
+                d_logits = nf.convolution_layer(x, model_params["d_output"], [1,1,1,1], name="conv4", activat_fn=nf.lrelu, flatten=False, initializer=init)
+
+        else:
+            d_logits = network
+  
+        return [network, d_logits]
+
+
+    def edsr_lsgan_recursive(self, kwargs):
+
+        ###Generator
+        init = tf.random_uniform_initializer(minval=-0.05, maxval=0.05, seed=None, dtype=tf.float32)
+        scale = kwargs["scale"]
+        reuse = kwargs["reuse"]
+        d_inputs = kwargs["d_inputs"]
+        d_target = kwargs["d_target"]
+        aux_input = kwargs["aux_input"]
+        is_training = kwargs["is_training"]
+        is_generate = kwargs["is_generate"]
+        feature_size = 64
+        scaling_factor = 1
+        num_resblock = 4
+
+
+            
+        model_params = {
+
+                        'conv1': [3,3,feature_size],
+                        'resblock': [3,3,feature_size],
+                        'conv2': [3,3,feature_size],
+                        'conv3': [3,3,3],
+                        'd_output': [3,3,3],
+
+                        'conv1_wgan': [5,5,feature_size],
+                        'conv2_wgan': [5,5,feature_size*2],
+                        'conv3_wgan': [5,5,feature_size*4],
+                        'd_output_wgan': [5,5,3],                        
+                        'maxpool_wgan': [1, 3, 3, 1],
+                        }
+        
+        with tf.variable_scope("EDSR_gen", reuse=reuse): 
+            concat_input = tf.concat([self.inputs, aux_input], axis=3)   
+            x = nf.convolution_layer(concat_input, model_params["conv1"], [1,1,1,1], name="conv1", activat_fn=None, initializer=init)
+            conv_1 = x
+            with tf.variable_scope("resblock",reuse=reuse): 
+            
+                    #Add the residual blocks to the model
+                    for i in range(num_resblock):
+                        x = nf.resBlock(x,feature_size,scale=scaling_factor, reuse=reuse, idx = i, initializer=init)
+                    x = nf.convolution_layer(x, model_params["conv2"], [1,1,1,1], name="conv2", activat_fn=None, initializer=init)
+                    x += conv_1
+
+            with tf.variable_scope("upsamplex2", reuse=reuse):
+                    #upsample2 = nf.upsample(x, 2, feature_size, 3,None, initializer=init)
+                    upsample2 = x
+                    network = nf.convolution_layer(upsample2, model_params["conv3"], [1,1,1,1], name="conv3", activat_fn=None, initializer=init)
+       
+        ###Discriminator
+        """
+        DEPTH = 64
+        model_params = {
+
+                        'conv1_wgan': [5,5,DEPTH],
+                        'conv2_wgan': [5,5,DEPTH*2],
+                        'conv3_wgan': [5,5,DEPTH*4],
+                        'd_output_wgan': [5,5,3],                        
+                        'maxpool_wgan': [1, 3, 3, 1],
+                        }
+        """
+        num_resblock = 0
+
+        if is_training:
+
+            if d_inputs == None: 
+
+                #Test 
+                input_gan = network
+            else:
+                input_gan = d_inputs
+            
+            
+            with tf.variable_scope("EDSR_dis", reuse=reuse):     
+                x = nf.convolution_layer( input_gan, model_params["conv1"], [1,1,1,1], name="conv1",  activat_fn=nf.lrelu, is_bn=True,initializer=init)
+                
+                x = nf.convolution_layer(x, model_params["conv1"], [1,1,1,1], name="conv3",  activat_fn=nf.lrelu, is_bn=True, initializer=init)
+                mid_out = nf.convolution_layer(x, model_params["d_output"], [1,1,1,1], name="conv4", activat_fn=nf.lrelu, flatten=False, initializer=init)
+                
+                #Down sample
+                x = nf.convolution_layer(mid_out,   model_params["conv1_wgan"],    [1,1,1,1], name="conv1_wgan",     activat_fn=nf.lrelu, initializer=init)
+
+                pool1 = nf.max_pool_layer(x, [1, 2, 2, 1], [1, 2, 2, 1], name="conv1_wgan_mp")
+                pool1_ = nf.max_pool_layer(-x, [1, 2, 2, 1], [1, 2, 2, 1], name="conv1_wgan_mp")
+                minus_mask = tf.cast(tf.greater(tf.abs(pool1_), pool1), tf.float32)
+                plus_mask = tf.cast(tf.greater(pool1, tf.abs(pool1_)), tf.float32)
+                pool1 = plus_mask*pool1 + minus_mask*(-pool1_)
+                    
+                x = nf.convolution_layer(pool1,       model_params["conv2_wgan"],    [1,1,1,1], name="conv2_wgan",     activat_fn=nf.lrelu, initializer=init)
+
+                pool2 = nf.max_pool_layer(x, model_params["maxpool_wgan"], [1, 2, 2, 1], name="conv2_wgan_mp")
+                pool2_ = nf.max_pool_layer(-x, model_params["maxpool_wgan"], [1, 2, 2, 1], name="conv2_wgan_mp")
+                minus_mask = tf.cast(tf.greater(tf.abs(pool2_), pool2), tf.float32)
+                plus_mask = tf.cast(tf.greater(pool2, tf.abs(pool2_)), tf.float32)
+                pool2 = plus_mask*pool2 + minus_mask*(-pool2_)
+
+                x = nf.convolution_layer(pool2,       model_params["conv3_wgan"],    [1,1,1,1], name="conv3_wgan",     activat_fn=nf.lrelu, initializer=init)
+                    
+                pool3 = nf.max_pool_layer(x, model_params["maxpool_wgan"], [1, 2, 2, 1], name="conv3_wgan_mp")
+                pool3_ = nf.max_pool_layer(-x, model_params["maxpool_wgan"], [1, 2, 2, 1], name="conv3_wgan_mp")
+                minus_mask = tf.cast(tf.greater(tf.abs(pool3_), pool3), tf.float32)
+                plus_mask = tf.cast(tf.greater(pool3, tf.abs(pool3_)), tf.float32)
+                pool3 = plus_mask*pool3 + minus_mask*(-pool3_)    
+                x = nf.convolution_layer(pool3,           model_params["d_output_wgan"], [1,1,1,1], name="d_output_wgan",  activat_fn=nf.lrelu, initializer=init)
+                d_logits = x
+        else:
+            d_logits = network
+  
+        return [network, d_logits, mid_out]
+
     def edsr_lsgan_dis_large(self, kwargs):
 
         ###Generator
@@ -1101,7 +1309,8 @@ class model_zoo:
                       "grr_grid_srcnn_v1","edsr_v1", "espcn_v1","edsr_v2",
                       "edsr_attention_v1", "edsr_1X1_v1", "edsr_local_att_v1",
                       "edsr_local_att_v2_upsample", "edsr_attention_v2", "edsr_v2_dual",
-                      "edsr_lsgan", "edsr_lsgan_up", "edsr_lsgan_dis_large"]
+                      "edsr_lsgan", "edsr_lsgan_up", "edsr_lsgan_dis_large"
+                      , "edsr_wgan_encode", "edsr_lsgan_recursive"]
         
         if self.model_ticket not in model_list:
             print("sorry, wrong ticket!")
