@@ -9,14 +9,16 @@ sys.path.append('./utility')
 import utility as ut
 
 
-#def lrelu(x, name = "leaky", alpha = 0.2):
-#
+def lrelu(x, name = "leaky", alpha = 0.2):
+
 #    with tf.variable_scope(name):
 #        leaky = tf.nn.relu(x) - alpha * tf.nn.relu(-x)
 #    return leaky
 
-def lrelu(name,x, leak=0.2):
-    return tf.maximum(x, leak * x, name=name)
+    return tf.maximum(x, alpha * x, name=name)
+
+#def lrelu(name,x, leak=0.2):
+#    return tf.maximum(x, leak * x, name=name)
 
 def batchnorm(input, index = 0, reuse = False):
     with tf.variable_scope("batchnorm_{}".format(index), reuse = reuse):
@@ -62,6 +64,9 @@ def convolution_layer(inputs, kernel_shape, stride, name, flatten = False ,paddi
         
     return net
 
+def max_pool_layer(inputs, kernel_shape, stride, name=None, padding='VALID'):
+           
+    return tf.nn.max_pool(inputs, kernel_shape, stride, padding, name=name)
 
 def fc_layer(inputs, out_shape, name,initializer=tf.contrib.layers.xavier_initializer(), activat_fn=tf.nn.relu):
     

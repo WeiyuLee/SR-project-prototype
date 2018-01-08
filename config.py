@@ -589,6 +589,134 @@ class config:
 		eval_config["test_set"] = ["Set5"]
 		eval_config["models"] = [edsr_lsgan_up(self)]
 		eval_config["summary_file"] = "example_summary.txt"
+
+	def EDSR_BASELINE(self):
+
+		train_config = self.config["train"]
+
+		train_config["mode"] = "small" # Operation mode: normal or freq [normal]
+		train_config["epoch"] = 20000  # Number of epoch [10]
+		train_config["batch_size"] = 16 # The size of batch images [128]
+		train_config["image_size"] = 48 # The size of image to use [33]
+		train_config["label_size"] = 96 # The size of label to produce [21]
+		train_config["learning_rate"] = 1e-4 #The learning rate of gradient descent algorithm [1e-4]
+		train_config["color_dim"] = 3 # Dimension of image color. [1]
+		train_config["scale"] = 2 # The size of scale factor for preprocessing input image [3]
+		train_config["train_extract_stride"] = 14 #The size of stride to apply input image [14]
+		train_config["test_extract_stride"] = train_config["label_size"] #The size of stride to apply input image [14]
+		train_config["checkpoint_dir"] = "/home/wei/ML/model/SuperResolution/SR-project-prototype/" #Name of checkpoint directory [checkpoint]
+		train_config["log_dir"] = "/home/wei/ML/model/SuperResolution/SR-project-prototype/log/" #Name of checkpoint directory [checkpoint]
+		train_config["output_dir"] = "output" # Name of sample directory [output]
+		train_config["train_dir"] =  "Train" # Name of train dataset directory
+		train_config["test_dir"] = "Test/Set5" # Name of test dataset directory [Test/Set5]
+		train_config["h5_dir"] = "/home/wei/ML/dataset/SuperResolution/train" # Name of train dataset .h5 file
+		train_config["train_h5_name"] = "train" # Name of train dataset .h5 file
+		train_config["test_h5_name"] = "test" # Name of test dataset .h5 file
+#		train_config["ckpt_name"] = "EDSR_BASELINE_v1" # Name of checkpoints 
+		train_config["ckpt_name"] = "EDSR_BASELINE_v2" # Name of checkpoints # only resblocks have activation function
+		train_config["is_train"] = True # True for training, False for testing [True]
+		train_config["model_ticket"] = "edsr_v2" # Name of checkpoints   
+		train_config["curr_epoch"] = 0 # Name of checkpoints        
+
+		def edsr_lsgan(self):
+						
+			mconfig = {}
+			
+			mconfig["EDSR_WGAN"] = {
+
+										"scale":[1],
+										"subimages":[96,96],
+										"padding":[8,8],
+										"ckpt_file":"/home/wei/ML/model/SuperResolution/SR-project-prototype/EDSR_WGAN_v5_PatchWGAN/EDSR_WGAN_v5_PatchWGAN-839720",
+										"isGray": False,
+										"isNormallized":True,
+										"upsample": False,
+										"sub_mean":False,
+										"model_config" :{"d_inputs":None, "d_target":None,"scale":2,"feature_size" : 64,"dropout" : 1.0,"feature_size" : 64, "is_training":False, "reuse":False}
+										}
+			
+			
+			return mconfig
+
+		
+
+		eval_config = self.config["evaluation"]
+		eval_config["dataroot"] = '/home/wei/ML/dataset/SuperResolution/'
+		eval_config["test_set"] = ["Set5_model"]
+		eval_config["models"] = [edsr_lsgan(self)]
+		eval_config["summary_file"] = "example_summary.txt"  
+
+	def EDSR_WGAN(self):
+
+		train_config = self.config["train"]
+
+		train_config["mode"] = "small" # Operation mode: normal or freq [normal]
+		train_config["epoch"] = 20000  # Number of epoch [10]
+		train_config["batch_size"] = 16 # The size of batch images [128]
+		train_config["image_size"] = 48 # The size of image to use [33]
+		train_config["label_size"] = 96 # The size of label to produce [21]
+		train_config["learning_rate"] = 1e-4 #The learning rate of gradient descent algorithm [1e-4]
+		train_config["color_dim"] = 3 # Dimension of image color. [1]
+		train_config["scale"] = 2 # The size of scale factor for preprocessing input image [3]
+		train_config["train_extract_stride"] = 14 #The size of stride to apply input image [14]
+		train_config["test_extract_stride"] = train_config["label_size"] #The size of stride to apply input image [14]
+		train_config["checkpoint_dir"] = "/home/wei/ML/model/SuperResolution/SR-project-prototype/" #Name of checkpoint directory [checkpoint]
+		train_config["log_dir"] = "/home/wei/ML/model/SuperResolution/SR-project-prototype/log/" #Name of checkpoint directory [checkpoint]
+		train_config["output_dir"] = "output" # Name of sample directory [output]
+		train_config["train_dir"] =  "Train" # Name of train dataset directory
+		train_config["test_dir"] = "Test/Set5" # Name of test dataset directory [Test/Set5]
+		train_config["h5_dir"] = "/home/wei/ML/dataset/SuperResolution/train" # Name of train dataset .h5 file
+		train_config["train_h5_name"] = "train" # Name of train dataset .h5 file
+		train_config["test_h5_name"] = "test" # Name of test dataset .h5 file
+#		train_config["ckpt_name"] = "EDSR_WGAN_v1" # Name of checkpoints       
+#		train_config["ckpt_name"] = "EDSR_WGAN_v3_PatchWGAN_" # Name of checkpoints               
+#		train_config["ckpt_name"] = "EDSR_WGAN_v4_PatchWGAN" # Name of checkpoints      
+#		train_config["ckpt_name"] = "EDSR_WGAN_v5_PatchWGAN" # Name of checkpoints              
+#		train_config["ckpt_name"] = "EDSR_WGAN_v5-0-1_PatchWGAN" # Name of checkpoints # Gen's resblock=4             
+#		train_config["ckpt_name"] = "EDSR_WGAN_v5-1_PatchWGAN" # Name of checkpoints              
+#		train_config["ckpt_name"] = "EDSR_WGAN_v5-2_PatchWGAN" # Name of checkpoints  # for confrim parameters     
+#		train_config["ckpt_name"] = "EDSR_WGAN_v5-3_PatchWGAN" # Name of checkpoint # all [9 9]
+#		train_config["ckpt_name"] = "EDSR_WGAN_v5-3-1_PatchWGAN" # Name of checkpoint # all [9 9], L1 weighted 100
+#		train_config["ckpt_name"] = "EDSR_WGAN_v5-3-2_PatchWGAN" # Name of checkpoint # all [9 9], L1 weighted 1
+#		train_config["ckpt_name"] = "EDSR_WGAN_v5-4_PatchWGAN" # Name of checkpoint # conv 9->7->5->5
+#		train_config["ckpt_name"] = "EDSR_WGAN_v5-4-1_PatchWGAN" # Name of checkpoint # conv 5->7->5->5, L1 weighted 50
+#		train_config["ckpt_name"] = "EDSR_WGAN_v5-4-2_PatchWGAN" # Name of checkpoint # conv 5->7->9->5, L1 weighted 50        
+#		train_config["ckpt_name"] = "EDSR_WGAN_v6_PatchWGAN-GP" # Name of checkpoints              
+#		train_config["ckpt_name"] = "EDSR_WGAN_v7_PatchWGAN" # Name of checkpoints # Gen's resblock=16, depth=28, L1 weighted 50 
+#		train_config["ckpt_name"] = "EDSR_WGAN_v7-1_PatchWGAN" # Name of checkpoints # Gen's resblock=16, conv 5->7->9->5, depth=32, L1 weighted 50         
+		train_config["ckpt_name"] = "EDSR_WGAN_v7-2_PatchWGAN" # Name of checkpoints # Gen's resblock=16, conv 5->5->5->5, depth=32, L1 weighted 50         
+		train_config["is_train"] = True # True for training, False for testing [True]
+		train_config["model_ticket"] = "EDSR_WGAN" # Name of checkpoints
+#		train_config["curr_epoch"] = 1011 # Name of checkpoints        
+		train_config["curr_epoch"] = 0 # Name of checkpoints        
+
+		def edsr_lsgan(self):
+						
+			mconfig = {}
+			
+			mconfig["EDSR_WGAN"] = {
+
+										"scale":[1],
+										"subimages":[96,96],
+										"padding":[8,8],
+										"ckpt_file":"/home/wei/ML/model/SuperResolution/SR-project-prototype/EDSR_WGAN_v5_PatchWGAN/EDSR_WGAN_v5_PatchWGAN-839720",
+										"isGray": False,
+										"isNormallized":True,
+										"upsample": False,
+										"sub_mean":False,
+										"model_config" :{"d_inputs":None, "d_target":None,"scale":2,"feature_size" : 64,"dropout" : 1.0,"feature_size" : 64, "is_training":False, "reuse":False}
+										}
+			
+			
+			return mconfig
+
+		
+
+		eval_config = self.config["evaluation"]
+		eval_config["dataroot"] = '/home/wei/ML/dataset/SuperResolution/'
+		eval_config["test_set"] = ["Set5_model"]
+		eval_config["models"] = [edsr_lsgan(self)]
+		eval_config["summary_file"] = "example_summary.txt"        
         
 	def EDSR_WGAN_MNIST(self):
 

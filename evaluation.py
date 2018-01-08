@@ -313,12 +313,21 @@ class evaluation:
         else: inputs_n = self.inputs
 
         mz = model_zoo.model_zoo(inputs_n, None, False, model_ticket)    
-        model_prediction = mz.build_model(config)
+        
+        # Non-GAN 
+        #model_prediction = mz.build_model(config)
+        
+        # GAN
+        gen_f = mz.build_model({"d_inputs":None, "d_target":None, "scale":scale, "feature_size":64, "reuse":False, "is_training":True, "net":"Gen"})
+        #dis_t = mz.build_model({"d_inputs":None, "d_target":None, "scale":scale, "feature_size":64, "reuse":False, "is_training":True, "net":"Dis", "d_model":"PatchWGAN"})
+        #dis_f = mz.build_model({"d_inputs":None, "d_target":None, "scale":scale, "feature_size":64, "reuse":True, "is_training":True, "net":"Dis", "d_model":"PatchWGAN"})        
+        
         sess = tf.Session()
         saver = tf.train.Saver()
         saver.restore(sess, ckpt_file)
 
-        return sess, model_prediction[0]
+#        return sess, model_prediction[0]
+        return sess, gen_f
 
     def prediction(self, image, sess,model_prediction, scale):
 
@@ -426,7 +435,7 @@ class evaluation:
                                     scale = 1  
 
 
-                            input_pair, in_mean, tar_mean = self.input_setup(LR_img, HR_img,model_dict[mkey]["sub_mean"] ,padding_size = padding_size, subimg_size = subimg_size, scale = scale)
+                            input_pair, in_mean, tar_mean = self.input_setup(LR_img, HR_img, model_dict[mkey]["sub_mean"], padding_size = padding_size, subimg_size = subimg_size, scale = scale)
                             test_input = input_pair['inputs']
                             key =  input_pair['input_key']
 
