@@ -49,7 +49,8 @@ def main(_):
                       test_h5_name=conf["test_h5_name"],
                       ckpt_name=conf["ckpt_name"],
                       is_train=conf["is_train"],
-                      model_ticket=conf["model_ticket"])
+                      model_ticket=conf["model_ticket"],
+                      curr_epoch = conf["curr_epoch"])
 
         if conf["is_train"]:
             srcnn.train()

@@ -937,9 +937,10 @@ class config:
 		train_config["h5_dir"] = "/home/ubuntu/dataset/SuperResolution/train" # Name of train dataset .h5 file
 		train_config["train_h5_name"] = "train" # Name of train dataset .h5 file
 		train_config["test_h5_name"] = "test" # Name of test dataset .h5 file
-		train_config["ckpt_name"] = "EDSR_WGAN_att_v1" # Name of checkpoints
+		train_config["ckpt_name"] = "EDSR_WGAN_att_v2" # Name of checkpoints
 		train_config["is_train"] = True # True for training, False for testing [True]
 		train_config["model_ticket"] = "EDSR_WGAN_att" # Name of checkpoints
+		train_config["curr_epoch"] = 0 
 
 		def EDSR_WGAN_att_v1(self):
 						

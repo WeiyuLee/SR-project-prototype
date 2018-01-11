@@ -103,10 +103,9 @@ class MODEL(object):
         self.ckpt_name = ckpt_name
         
         self.is_train = is_train
-        self.curr_epoch = curr_epoch    
-        
-        self.model_ticket = model_ticket
-        
+        self.curr_epoch = curr_epoch   
+
+        self.model_ticket = model_ticket      
         self.model_list = ["googleLeNet_v1", "resNet_v1", "srcnn_v1", "grr_srcnn_v1", 
                            "grr_grid_srcnn_v1", "espcn_v1", "edsr_v1","edsr_v2","edsr_attention_v1",
                            "edsr_1X1_v1", "edsr_local_att_v1", "edsr_attention_v2", "edsr_v2_dual",
@@ -1458,7 +1457,7 @@ class MODEL(object):
            lr_list.append(misc.imread(lr_imgs[0][i]))
            if lrtype == 'all':
             lr_list2.append(misc.imread(lr_imgs[1][i]))
-           #if lrtype == 'bicubic' and i > 32: break
+           if lrtype == 'bicubic' and i > 160: break
 
         print("[load_divk] type: [{}], lrtype: [{}]".format(type, lrtype))
         print("[load_divk] HR images number: [{}]".format(len(hr_list)))
@@ -4747,7 +4746,7 @@ class MODEL(object):
         # Define dataset path
         #96X96
         test_dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/Set5/validation96_scale_"+"2"+"/",type="test")
-        dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/DIV2K_base/", lrtype='bicubic', type='train')
+        dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/DIV2K_pretrain/", lrtype='all', type='train')
 
         log_dir = os.path.join(self.log_dir, self.ckpt_name, "log")
         if not os.path.exists(log_dir):
