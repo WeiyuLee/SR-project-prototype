@@ -728,12 +728,12 @@ class config:
 										"subimages":[80,80],
 										"padding":[8,8],
 										#"ckpt_file":"/home/ubuntu/model/model/SR_project/edsr_base_attention_v2_oh/edsr_base_attention_v2_oh-719656",
-										"ckpt_file":"/home/ubuntu/model/model/SR_project/edsr_lsgan_up_aux_v2/edsr_lsgan_up_aux_v2-99952",
+										"ckpt_file":"/home/ubuntu/model/model/SR_project/edsr_lsgan_lap_v2/edsr_lsgan_lap_v2-59406",
 										"isGray": False,
 										"isNormallized":True,
 										"upsample": False,
 										"sub_mean":False,
-										"model_config" :{"d_inputs":None, "d_target":None,"scale":2,"feature_size" : 64,"dropout" : 1.0,"feature_size" : 64, "is_training":False, "reuse":False}
+										"model_config" :{"d_inputs":None, "d_target":None,"scale":2,"is_generate":True,"feature_size" : 64,"dropout" : 1.0,"feature_size" : 64, "is_training":False, "reuse":False}
 										}
 			
 			
@@ -937,7 +937,7 @@ class config:
 		train_config["h5_dir"] = "/home/ubuntu/dataset/SuperResolution/train" # Name of train dataset .h5 file
 		train_config["train_h5_name"] = "train" # Name of train dataset .h5 file
 		train_config["test_h5_name"] = "test" # Name of test dataset .h5 file
-		train_config["ckpt_name"] = "EDSR_WGAN_att_v2" # Name of checkpoints
+		train_config["ckpt_name"] = "EDSR_WGAN_att_l1900" # Name of checkpoints
 		train_config["is_train"] = True # True for training, False for testing [True]
 		train_config["model_ticket"] = "EDSR_WGAN_att" # Name of checkpoints
 		train_config["curr_epoch"] = 0 
@@ -946,18 +946,18 @@ class config:
 						
 			mconfig = {}
 			
-			mconfig["edsr_lsgan_lap"] = {
+			mconfig["EDSR_WGAN_att"] = {
 
 										"scale":[1],
-										"subimages":[80,80],
-										"padding":[8,8],
+										"subimages":[96,96],
+										"padding":[0,0],
 										#"ckpt_file":"/home/ubuntu/model/model/SR_project/edsr_base_attention_v2_oh/edsr_base_attention_v2_oh-719656",
-										"ckpt_file":"/home/ubuntu/model/model/SR_project/edsr_lsgan_up_aux_v2/edsr_lsgan_up_aux_v2-99952",
+										"ckpt_file":"/home/ubuntu/model/model/SR_project/EDSR_WGAN_att_l1300/EDSR_WGAN_att_l1300-90312",
 										"isGray": False,
 										"isNormallized":True,
 										"upsample": False,
 										"sub_mean":False,
-										"model_config" :{"d_inputs":None, "d_target":None,"scale":2,"feature_size" : 64,"dropout" : 1.0,"feature_size" : 64, "is_training":False, "reuse":False}
+										"model_config" :{"d_inputs":None, "d_target":None,"scale":2,"feature_size" : 64,"dropout" : 1.0,"feature_size" : 64, "is_training":False, "reuse":False, "net":"Gen"}
 										}
 			
 			

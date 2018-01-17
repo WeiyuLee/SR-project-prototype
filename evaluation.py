@@ -11,7 +11,7 @@ import utils as ut
 import model_zoo  
 import config
 
-FULL_SIZE = True
+FULL_SIZE = False
 
 def resize(inputs, target_shape, interpolation = cv2.INTER_CUBIC):
     
@@ -54,14 +54,21 @@ def split_img(imgname,img, padding_size, subimg_size):
                     ori_size[2]]
 
     strides = subimg_size
+    #strides = [1,1]
     sub_imgs = {}
 
 
-    for r in range(padded_size[0]//subimg_size[0]):
-        for c in range(padded_size[1]//subimg_size[1]):
 
-            grid_r = padding_size[0] + r*strides[0] 
-            grid_c = padding_size[1] + c*strides[1] 
+    #for r in range(padded_size[0]//subimg_size[0]):
+    #    for c in range(padded_size[1]//subimg_size[1]):
+    for r in range(0,(padded_size[0] - subimg_size[0]+2),2):
+        for c in range(0,(padded_size[1] - subimg_size[1]+2),2):
+
+            #grid_r = padding_size[0] + r*strides[0] 
+            #grid_c = padding_size[1] + c*strides[1]
+            grid_r = padding_size[0] + r
+            grid_c = padding_size[1] + c
+
 
             sub_img = img[  grid_r - padding_size[0] : grid_r + strides[0] + padding_size[0],
                             grid_c - padding_size[1] : grid_c + strides[1] + padding_size[1],
@@ -70,6 +77,7 @@ def split_img(imgname,img, padding_size, subimg_size):
 
             # insert sub image to dictionary with key = [imagename]_[row_index]_[col_index]
             sub_imgs[imgname + "_"+ str(grid_r) + "_" + str(grid_c)] = sub_img
+            #rint(np.shape(sub_img))
 
     return padded_size, sub_imgs
 
@@ -84,8 +92,12 @@ def merge_img(img_size, sub_images, padding_size,subimg_size, scale=2, down_scal
                     img_size[2]]
 
 
-    merged_image = np.zeros([   (padded_size[0]//subimg_size[0])*subimg_size[0],
-                                (padded_size[1]//subimg_size[1])*subimg_size[1],
+    #merged_image = np.zeros([   (padded_size[0]//subimg_size[0])*subimg_size[0],
+    #                            (padded_size[1]//subimg_size[1])*subimg_size[1],
+    #                            padded_size[2]])
+
+    merged_image = np.zeros([   (padded_size[0]),
+                                (padded_size[1]),
                                 padded_size[2]])
     for k in sub_images:
 
@@ -266,7 +278,7 @@ class evaluation:
         #targets = imread(target_path)
         inputs = scipy.misc.imread(input_path, mode="RGB")
         targets = scipy.misc.imread(target_path, mode="RGB")
-        
+        print(input_path, np.shape(inputs))
         if sub_mean:
             inputs  = inputs 
             targets  = targets - np.mean(targets)
@@ -440,7 +452,9 @@ class evaluation:
                             else: mscale = int(scale_key)
                             sess, model_prediction = self.load_model(mkey,model_dict[mkey]["ckpt_file"],mscale, model_dict[mkey]["model_config"], model_dict[mkey]["isNormallized"])
 
+                            print(len(test_input))
                             for l in range(len(test_input)):
+                                print("Progress:{}/{}".format(l,len(test_input)))
                                 if model_dict[mkey]["isGray"] == True: 
                                     testimg = np.expand_dims(test_input[l][:,:,0], axis = 2)
                                     if l==0: targetimg = np.expand_dims(input_pair['target'][:,:,0], axis=2)
@@ -450,8 +464,9 @@ class evaluation:
                                 
                                 
                                 m_out = self.prediction([testimg], sess, model_prediction, int(scale_key))    
-
-                                output_stack[key[l]] = np.squeeze(m_out,axis=0)
+                                #print(np.shape(m_out))
+                                output_stack[key[l]] = m_out
+                                #output_stack[key[l]] = np.squeeze(m_out,axis=0)
                                 #print("key[l]:{},{}".format(np.max(output_stack[key[l]]), np.min(output_stack[key[l]])))
                             
                             model_out = merge_img(targetimg.shape, output_stack, up_padding_size,up_subimg_size, scale, down_scale_by_model=False)    

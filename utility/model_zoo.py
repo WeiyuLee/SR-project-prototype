@@ -1343,8 +1343,8 @@ class model_zoo:
         else:
             d_logits = network
   
-        return [network, d_logits, mid_out, laplacian_filter(network), laplacian_filter(d_target)]
-
+        #return [network, d_logits, mid_out, laplacian_filter(network), laplacian_filter(d_target)]
+        return network
 
     def edsr_lsgan_lap_v2(self, kwargs):
 

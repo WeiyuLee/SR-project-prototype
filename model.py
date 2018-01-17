@@ -1403,7 +1403,7 @@ class MODEL(object):
             return False          
 
 
-    def load_divk(self, dataset_path, mean=0, lrtype='bicubic', type='train'):
+    def load_divk(self, dataset_path, mean=0, lrtype=None, type='train'):
 
         #dataset_path = "/home/ubuntu/dataset/SuperResolution/DIV2K/"
 
@@ -1457,7 +1457,7 @@ class MODEL(object):
            lr_list.append(misc.imread(lr_imgs[0][i]))
            if lrtype == 'all':
             lr_list2.append(misc.imread(lr_imgs[1][i]))
-           if lrtype == 'bicubic' and i > 160: break
+           if lrtype == 'bicubic' and i > 32: break
 
         print("[load_divk] type: [{}], lrtype: [{}]".format(type, lrtype))
         print("[load_divk] HR images number: [{}]".format(len(hr_list)))
@@ -4638,7 +4638,8 @@ class MODEL(object):
         disc_fake_loss = tf.reduce_mean(dis_f)
 
 #        reconstucted_weight = 1.0  #StarGAN is 10 v3 
-        reconstucted_weight = 50  #StarGAN is 10
+        #reconstucted_weight = 50  #StarGAN is 10
+        self.reconstucted_weight = reconstucted_weight = 900
         self.d_loss =   disc_fake_loss - disc_ture_loss
         self.g_l1loss = tf.reduce_mean(tf.losses.absolute_difference(target,gen_f))
         self.g_loss =  -1.0*disc_fake_loss + reconstucted_weight*self.g_l1loss
@@ -4745,8 +4746,8 @@ class MODEL(object):
 
         # Define dataset path
         #96X96
-        test_dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/Set5/validation96_scale_"+"2"+"/",type="test")
-        dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/DIV2K_pretrain/", lrtype='all', type='train')
+        test_dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/Set5/validation_EDSRbase96/Set5/X"+"2"+"/",type="test")
+        dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/DIV2K_pretrain/", lrtype='bicubic', type='train')
 
         log_dir = os.path.join(self.log_dir, self.ckpt_name, "log")
         if not os.path.exists(log_dir):
@@ -4770,7 +4771,7 @@ class MODEL(object):
             learning_rate = self.learning_rate
         else:
             learning_rate = self.learning_rate
-        print("Current learning rate: [{}]".format(learning_rate))
+        print("Current learning rate: [{}], weight:[{}]".format(learning_rate,  self.reconstucted_weight))
         
 
         epoch_pbar = tqdm(range(self.curr_epoch, self.epoch))
