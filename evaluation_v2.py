@@ -188,8 +188,6 @@ class evaluation:
 				pred = self.prediction(grid_imgs[img]["grids"][grid_key])
 				output_grids[grid_key] = pred[0]
 
-			print("Finish model output")
-
 			merged_img = self.merge_img(grid_imgs[img]["img_size"], output_grids)
 			merged_img = merged_img*255.
 			merged_img = np.round(merged_img, 0)
@@ -197,7 +195,7 @@ class evaluation:
 
 			test_img = scipy.misc.toimage(merged_img, high=np.max(merged_img), low=np.min(merged_img))
 			test_img.save("./evaluation/test/test_{}.png".format(progress))
-			print("Process:{}/{}".format(progress, len(grid_imgs)+1))
+			print("Process:{}/{}".format(progress, len(grid_imgs)))
 			progress += 1
 			
 		
