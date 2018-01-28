@@ -11,6 +11,7 @@ sys.path.append('./utility')
 import utils as ut
 import model_zoo  
 import config
+import unittest
 
 
 class evaluation:
@@ -219,16 +220,16 @@ def  main_process():
 	eval.run_evaluation()
 
 #Unit Test
-class test_evaluation:
+class test_evaluation(unittest.TestCase):
 
-	def __init__(self):
+	def setUp(self):
 
 		self.dataset = '/home/ubuntu/dataset/SuperResolution/Set5/preprocessed_scale_1'
 		model_ticket = "edsr_attention_v3"
 		ckpt_file = "/home/ubuntu/model/model/SR_project/edsr_attention_v3_noatt/edsr_attention_v3_noatt-111496"
 		model_config  = {"d_inputs":None, "d_target":None,"scale":2,"feature_size" : 64,"dropout" : 1.0,"feature_size" : 64, "is_training":False, "reuse":False, "net":"Gen"}
 										
-		self.eval = evaluation(self.dataset, model_ticket, ckpt_file)
+		self.eval = evaluation(self.dataset, model_ticket, ckpt_file, model_config)
 
 
 	def test_split_and_merge(self):
@@ -239,13 +240,20 @@ class test_evaluation:
 
 			img = scipy.misc.imread(imgname, mode="RGB")
 			print("Source size", img.shape)
-			plt.imshow(img.astype(np.uint8))
-			plt.show()
+			#plt.imshow(img.astype(np.uint8))
+			#plt.show()
 
 			merged_img = self.eval.merge_img(grid_imgs[imgname]["img_size"], grid_imgs[imgname]["grids"])
 			print("Merged size",merged_img.shape)
-			plt.imshow(merged_img.astype(np.uint8))
-			plt.show()
+			
+
+			shaved_shape = (img.shape[0] - 2*self.eval.padding_size,
+							img.shape[1] - 2*self.eval.padding_size,
+							img.shape[2])
+			
+			self.assertEqual(shaved_shape, merged_img.shape, msg="Must equal")
+			#plt.imshow(merged_img.astype(np.uint8))
+			#plt.show()
 
 	def test_run_evaluation(self):
 
@@ -256,7 +264,8 @@ class test_evaluation:
 if __name__ == '__main__':
 
     print("Start Evaluation")
+    unittest.main()
     #test_eval = test_evaluation()
     #test_eval.test_run_evaluation()
-    main_process()
+    #main_process()
     print("Done Evaluation")
