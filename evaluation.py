@@ -53,16 +53,15 @@ def split_img(imgname,img, padding_size, subimg_size):
                     ori_size[1] - 2*padding_size[1],
                     ori_size[2]]
 
-    strides = subimg_size
+    grid_size = subimg_size
     #strides = [1,1]
     sub_imgs = {}
 
 
-
     #for r in range(padded_size[0]//subimg_size[0]):
     #    for c in range(padded_size[1]//subimg_size[1]):
-    for r in range(0,(padded_size[0] - subimg_size[0]+2),2):
-        for c in range(0,(padded_size[1] - subimg_size[1]+2),2):
+    for r in range(0,(padded_size[0] - subimg_size[0] + 4 ),4):
+        for c in range(0,(padded_size[1] - subimg_size[1] + 4),4):
 
             #grid_r = padding_size[0] + r*strides[0] 
             #grid_c = padding_size[1] + c*strides[1]
@@ -70,15 +69,16 @@ def split_img(imgname,img, padding_size, subimg_size):
             grid_c = padding_size[1] + c
 
 
-            sub_img = img[  grid_r - padding_size[0] : grid_r + strides[0] + padding_size[0],
-                            grid_c - padding_size[1] : grid_c + strides[1] + padding_size[1],
+            sub_img = img[  grid_r - padding_size[0] : grid_r + grid_size[0] + padding_size[0],
+                            grid_c - padding_size[1] : grid_c + grid_size[1] + padding_size[1],
                             :]
             
+            if np.shape(sub_img) != (96,96,3): break
 
             # insert sub image to dictionary with key = [imagename]_[row_index]_[col_index]
             sub_imgs[imgname + "_"+ str(grid_r) + "_" + str(grid_c)] = sub_img
-            #rint(np.shape(sub_img))
-
+            
+            #print(np.shape(sub_img))
     return padded_size, sub_imgs
 
 

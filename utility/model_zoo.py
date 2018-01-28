@@ -1947,6 +1947,109 @@ class model_zoo:
             return d_logits
 
 
+    def edsr_attention_v3(self, kwargs):
+
+
+        def attention_network(image_input, layers, channels):
+
+            with tf.variable_scope("attention"):
+                    
+                    att_net = nf.convolution_layer(image_input, [3,3,64], [1,2,2,1],name="conv1-1")
+                    att_net = nf.convolution_layer(att_net, [3,3,64], [1,1,1,1],name="conv1-2")
+                    att_net = tf.nn.max_pool(att_net, ksize=[1, 3, 3, 1],strides=[1, 2, 2, 1], padding='SAME')
+                    att_net = nf.convolution_layer(att_net, [3,3,128], [1,1,1,1],name="conv2-1")
+                    att_net = nf.convolution_layer(att_net, [3,3,128], [1,1,1,1],name="conv2-2")
+                    att_net = tf.nn.max_pool(att_net, ksize=[1, 3, 3, 1],strides=[1, 2, 2, 1], padding='SAME')
+                    att_net = nf.convolution_layer(att_net, [3,3,256], [1,1,1,1],name="conv3-1")
+                    att_net = nf.convolution_layer(att_net, [3,3,256], [1,1,1,1],name="conv3-2")
+                    att_net = tf.nn.max_pool(att_net, ksize=[1, 3, 3, 1],strides=[1, 2, 2, 1], padding='SAME')
+                    att_net = nf.convolution_layer(att_net, [3,3,512], [1,1,1,1],name="conv4-1")
+                    #att_net = nf.convolution_layer(att_net, [3,3,512], [1,1,1,1],name="conv4-2")
+                    att_net = tf.nn.max_pool(att_net, ksize=[1, 3, 3, 1],strides=[1, 2, 2, 1], padding='SAME')
+                    att_net = tf.reshape(att_net, [-1, int(np.prod(att_net.get_shape()[1:]))]) 
+                    att_net = nf.fc_layer(att_net, 2048, name="fc1")
+                    att_net = nf.fc_layer(att_net, 2048, name="fc2")
+                    #att_net = tf.layers.dropout(att_net, rate=dropout, training=is_training, name='dropout1')
+                    logits = nf.fc_layer(att_net, channels*layers, name="logits", activat_fn=None)
+                    
+                    bsize = tf.shape(logits)[0]
+                    #logits = tf.reshape(logits, (bsize,1,1,channels*layers))
+                    logits = tf.reshape(logits, (bsize,1,1,channels, layers))
+                    weighting = tf.nn.softmax(logits)
+                    
+                    """
+                    max_index = tf.argmax(tf.nn.softmax(logits),4) 
+                    weighting = tf.one_hot(max_index, 
+                                        depth=layers, 
+                                        on_value=1.0,
+                                        axis = -1)
+                    """
+                  
+
+            return weighting
+
+        
+        init = tf.random_normal_initializer(stddev=0.01)
+
+        feature_size = 128
+        scaling_factor = 1
+
+#        DEPTH = 32
+        reuse = False
+
+        model_params = {
+
+                        'conv1': [3,3,feature_size],
+                        'resblock': [3,3,feature_size],
+                        'conv2': [3,3,feature_size],
+                        'conv3': [3,3,feature_size],
+                        'd_output': [3,3,3*feature_size],
+                        'logits': [3,3,3]
+
+                        }
+
+        
+        
+        ### Generator
+        num_resblock = 16              
+        g_input = self.inputs
+            
+        with tf.variable_scope("EDSR_gen", reuse=reuse):  
+
+          
+               
+            x = nf.convolution_layer(g_input, model_params["conv1"], [1,1,1,1], name="conv1", activat_fn=None, initializer=init)
+            conv_1 = x
+            
+            with tf.variable_scope("resblock",reuse=reuse): 
+                
+                        #Add the residual blocks to the model
+                    for i in range(num_resblock):
+                        x = nf.resBlock(x,feature_size,scale=scaling_factor, reuse=reuse, idx = i, initializer=init)
+                    x = nf.convolution_layer(x, model_params["conv2"], [1,1,1,1], name="conv2", activat_fn=None, initializer=init)
+                    x += conv_1
+            x = nf.convolution_layer(x, model_params["conv1"], [1,1,1,1], name="conv3",  activat_fn=None, initializer=init)
+            #g_network = nf.convolution_layer(x, model_params["d_output"], [1,1,1,1], name="conv4", activat_fn=None, initializer=init)
+            
+            #with tf.name_scope("attention_x2"):
+                #att_layers = feature_size
+                #arr = att_weight_x2 = attention_network(g_input, att_layers,3)
+                #arr = att_weight_x2 = attention_network(g_network, att_layers,3)
+
+            #Attention
+            #bsize, a, b, c = g_network.get_shape().as_list()
+            #g_network = tf.reshape(g_network, (-1, a, b, 3, att_layers))
+            #g_network = tf.multiply(g_network, arr)
+
+            #g_network = tf.reduce_sum(g_network,4)
+            #g_network = tf.nn.sigmoid(g_network)         
+            
+            #g_network = tf.reshape(g_network, (-1, a, b, 3*att_layers))  
+            g_network = nf.convolution_layer(x, model_params["logits"], [1,1,1,1], name="conv5", activat_fn=None, initializer=init)
+            arr = g_network
+        return g_network, arr
+
+
     def build_model(self, kwargs = {}):
 
         model_list = ["googleLeNet_v1", "resNet_v1", "srcnn_v1", "grr_srcnn_v1",
@@ -1955,7 +2058,7 @@ class model_zoo:
                       "edsr_local_att_v2_upsample", "edsr_attention_v2", "edsr_v2_dual",
                       "edsr_lsgan", "edsr_lsgan_up", "edsr_lsgan_dis_large"
                       , "edsr_wgan_encode", "edsr_lsgan_recursive", "edsr_lsgan_lap",
-                      "edsr_lsgan_lap_v2", "edsr_lsgan_lap_att_v2", "EDSR_WGAN_att"]
+                      "edsr_lsgan_lap_v2", "edsr_lsgan_lap_att_v2", "EDSR_WGAN_att", "edsr_attention_v3"]
         
         if self.model_ticket not in model_list:
             print("sorry, wrong ticket!")
