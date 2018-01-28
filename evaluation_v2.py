@@ -106,6 +106,7 @@ class evaluation:
 				
 				grid_imgs[str(subimg_rloc[0]) + "_" + str(subimg_rloc[1]) + \
 							"_" +  str(subimg_cloc[0]) + "_" +  str(subimg_cloc[1])] = subimg
+
 				
 		return grid_imgs
 	
@@ -135,6 +136,9 @@ class evaluation:
 			gridimg_loc_r = [self.padding_size , grid_r1 - grid_r0 - self.padding_size]
 			gridimg_loc_c = [self.padding_size , grid_c1 - grid_c0 - self.padding_size]
 
+
+
+
 			merged_image[mergeimg_loc_r[0]:mergeimg_loc_r[1],
 						 mergeimg_loc_c[0]:mergeimg_loc_c[1],
 						 :]\
@@ -158,7 +162,12 @@ class evaluation:
 
 		mz = model_zoo.model_zoo(inputs_n, None, False, self.model_ticket)
 		predict_op = mz.build_model(self.model_config)
-		self.predict_op = predict_op[0]
+		
+		if type(predict_op) is tuple:
+			self.predict_op = predict_op[0]
+		else:
+			self.predict_op = predict_op
+
 		self.sess = tf.Session()
 		saver = tf.train.Saver()
 		saver.restore(self.sess, self.ckpt_file)
@@ -250,7 +259,7 @@ class test_evaluation(unittest.TestCase):
 			shaved_shape = (img.shape[0] - 2*self.eval.padding_size,
 							img.shape[1] - 2*self.eval.padding_size,
 							img.shape[2])
-			
+
 			self.assertEqual(shaved_shape, merged_img.shape, msg="Must equal")
 			#plt.imshow(merged_img.astype(np.uint8))
 			#plt.show()
@@ -264,8 +273,8 @@ class test_evaluation(unittest.TestCase):
 if __name__ == '__main__':
 
     print("Start Evaluation")
-    unittest.main()
+    #unittest.main()
     #test_eval = test_evaluation()
     #test_eval.test_run_evaluation()
-    #main_process()
+    main_process()
     print("Done Evaluation")

@@ -966,7 +966,7 @@ class config:
 		
 
 		eval_config = self.config["evaluation"]
-		eval_config["dataroot"] = '/home/ubuntu/dataset/SuperResolution/'
+		eval_config["dataroot"] = '/home/ubuntu/dataset/SuperResolution/Set5/preprocessed_scale_1'
 		eval_config["test_set"] = ["Set5"]
 		eval_config["models"] = [EDSR_WGAN_att_v1(self)]
 		eval_config["summary_file"] = "example_summary.txt"
