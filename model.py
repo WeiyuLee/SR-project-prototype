@@ -1458,7 +1458,7 @@ class MODEL(object):
            lr_list.append(misc.imread(lr_imgs[0][i]))
            if lrtype == 'all':
             lr_list2.append(misc.imread(lr_imgs[1][i]))
-           #if lrtype == 'bicubic' and i > 32: break
+           if lrtype == 'bicubic' and i > 32: break
 
         print("[load_divk] type: [{}], lrtype: [{}]".format(type, lrtype))
         print("[load_divk] HR images number: [{}]".format(len(hr_list)))
@@ -1828,6 +1828,7 @@ class MODEL(object):
         Build SRCNN model
         """        
         # Define input and label images
+     
         self.input = tf.placeholder(tf.float32, [None, self.image_size, self.image_size, self.color_dim], name='images')
         self.image_target = tf.placeholder(tf.float32, [None, None, None, self.color_dim], name='labels')
         self.dropout = tf.placeholder(tf.float32, name='dropout')
@@ -1922,8 +1923,8 @@ class MODEL(object):
         # Define dataset path
 
         print("/home/ubuntu/dataset/SuperResolution/Set5/validation_scale_"+str(self.scale)+"/")
-        test_dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/Set5/validation_24_scale_"+str(self.scale)+"/",type="test")
-        dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/DIV2K/",lrtype="all", type="train")
+        test_dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/Set5/validation_scale_2/",type="test")
+        dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/DIV2K/",lrtype="bicubic", type="train")
 
         log_dir = os.path.join(self.log_dir, self.ckpt_name, "log")
         if not os.path.exists(log_dir):
@@ -1965,8 +1966,6 @@ class MODEL(object):
                 batch_index = idx*self.batch_size 
                 batch_images, batch_labels = batch_shuffle_rndc(train_data, train_label, self.scale, self.image_size,batch_index, self.batch_size)
                 
-                
-                #print(batch_images, batch_labels)
                 
                 # Run the model
                 _, train_loss = self.sess.run([self.train_op, self.l1_loss],

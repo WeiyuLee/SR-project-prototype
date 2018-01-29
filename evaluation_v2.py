@@ -13,20 +13,24 @@ import model_zoo
 import config
 import unittest
 
-FULL_IMAGE = True
+FULL_IMAGE = False
 
 class evaluation:
 
-    def __init__(self, dataset_path, model_ticket, ckpt_file,
-                 model_config, padding_size=4, subimg_size=(88, 88, 3)):
+    def __init__(self, config):
+
+        eval_conf = config["evaluation"]
+        model_conf = [mkey for mkey in eval_conf['models'][0]]
+        model_ticket = model_conf[0]
 
         #Set evaluation configuration
-        self.dataset_path = dataset_path
-        self.padding_size = padding_size
-        self.subimg_size = subimg_size
+        self.dataset_path = eval_conf["dataroot"]
+        self.padding_size = eval_conf['models'][0][model_ticket]["padding"]
+        self.subimg_size = eval_conf['models'][0][model_ticket]["subimages"]
         self.model_ticket = model_ticket
-        self.ckpt_file = ckpt_file
-        self.model_config = model_config
+        self.ckpt_file = eval_conf['models'][0][model_ticket]["ckpt_file"]
+        self.model_config = eval_conf['models'][0][model_ticket]["model_config"]
+        self.scale = eval_conf['models'][0][model_ticket]["scale"][0]
 
     def input_setup(self):
 
@@ -118,8 +122,8 @@ class evaluation:
         #Merge grids into image
         # Create an empty array for merging image
 
-        shaved_size =   [   img_size[0] - 2*self.padding_size,
-                            img_size[1] - 2*self.padding_size,
+        shaved_size =   [   (img_size[0] - 2*self.padding_size)*self.scale,
+                            (img_size[1] - 2*self.padding_size)*self.scale,
                             img_size[2]
                         ]
 
@@ -134,13 +138,10 @@ class evaluation:
             grid_c0 = int(key[2])
             grid_c1 = int(key[3])
 
-            mergeimg_loc_r = [grid_r0, grid_r1 - 2*self.padding_size]
-            mergeimg_loc_c = [grid_c0, grid_c1 - 2*self.padding_size]
-            gridimg_loc_r = [self.padding_size , grid_r1 - grid_r0 - self.padding_size]
-            gridimg_loc_c = [self.padding_size , grid_c1 - grid_c0 - self.padding_size]
-
-
-
+            mergeimg_loc_r = [grid_r0*self.scale, (grid_r1 - 2*self.padding_size)*self.scale]
+            mergeimg_loc_c = [grid_c0*self.scale, (grid_c1 - 2*self.padding_size)*self.scale]
+            gridimg_loc_r = [self.padding_size*self.scale , (grid_r1 - grid_r0 - self.padding_size)*self.scale]
+            gridimg_loc_c = [self.padding_size*self.scale , (grid_c1 - grid_c0 - self.padding_size)*self.scale]
 
             merged_image[mergeimg_loc_r[0]:mergeimg_loc_r[1],
                          mergeimg_loc_c[0]:mergeimg_loc_c[1],
@@ -221,15 +222,7 @@ def  main_process():
     args = parser.parse_args()
     conf = config.config(args.config).config
 
-    eval_conf = conf["evaluation"]
-    dataset = eval_conf["dataroot"]
-    model_conf = [mkey for mkey in eval_conf['models'][0]]
-    model_ticket = model_conf[0]
-    ckpt_file = eval_conf['models'][0][model_ticket]["ckpt_file"]
-    model_config = eval_conf['models'][0][model_ticket]["model_config"]
-    
-    
-    eval = evaluation(dataset, model_ticket, ckpt_file, model_config)
+    eval = evaluation(conf)
     eval.run_evaluation()
 
 #Unit Test

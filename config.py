@@ -421,10 +421,10 @@ class config:
 		train_config = self.config["train"]
 
 		train_config["mode"] = "small" # Operation mode: normal or freq [normal]
-		train_config["epoch"] = 20000  # Number of epoch [10]
+		train_config["epoch"] = 100000  # Number of epoch [10]
 		train_config["batch_size"] = 16 # The size of batch images [128]
-		train_config["image_size"] = 24 # The size of image to use [33]
-		train_config["label_size"] = 48 # The size of label to produce [21]
+		train_config["image_size"] = 48 # The size of image to use [33]
+		train_config["label_size"] = 96 # The size of label to produce [21]
 		train_config["learning_rate"] = 1e-4 #The learning rate of gradient descent algorithm [1e-4]
 		train_config["color_dim"] = 3 # Dimension of image color. [1]
 		train_config["scale"] = 2 # The size of scale factor for preprocessing input image [3]
@@ -438,9 +438,10 @@ class config:
 		train_config["h5_dir"] = "/home/ubuntu/dataset/SuperResolution/train" # Name of train dataset .h5 file
 		train_config["train_h5_name"] = "train" # Name of train dataset .h5 file
 		train_config["test_h5_name"] = "test" # Name of test dataset .h5 file
-		train_config["ckpt_name"] = "edsr_attention_v2_local_loss" # Name of checkpoints
+		train_config["ckpt_name"] = "edsr_attention_v2_test" # Name of checkpoints
 		train_config["is_train"] = True # True for training, False for testing [True]
 		train_config["model_ticket"] = "edsr_attention_v2" # Name of checkpoints
+		train_config["curr_epoch"] = 0
 
 		def edsr_attention_v2(self):
 						
@@ -449,8 +450,8 @@ class config:
 			mconfig["edsr_attention_v2"] = {
 
 										"scale":[2],
-										"subimages":[96,96],
-										"padding":[16,16],
+										"subimages":(88,88,3), #V1:[96,96]
+										"padding":4, #V1:[16,16]
 										#"ckpt_file":"/home/ubuntu/model/model/SR_project/edsr_base_attention_v2_oh/edsr_base_attention_v2_oh-719656",
 										"ckpt_file":"/home/ubuntu/model/model/SR_project/edsr_base_attention_v2/edsr_base_attention_v2-1117256",
 										"isGray": False,
@@ -465,7 +466,8 @@ class config:
 
 		
 		eval_config = self.config["evaluation"]
-		eval_config["dataroot"] = '/home/ubuntu/dataset/SuperResolution/'
+		#eval_config["dataroot"] = '/home/ubuntu/dataset/SuperResolution/'
+		eval_config["dataroot"] = '/home/ubuntu/dataset/SuperResolution/Set5/preprocessed_scale_2_v2/test'
 		eval_config["test_set"] = ["Set5"]
 		eval_config["models"] = [edsr_attention_v2(self)]
 		eval_config["summary_file"] = "example_summary.txt"
@@ -949,8 +951,8 @@ class config:
 			mconfig["EDSR_WGAN_att"] = {
 
 										"scale":[1],
-										"subimages":[80,80],
-										"padding":[8,8],
+										"subimages":(88,88,3),
+										"padding":4,
 										#"ckpt_file":"/home/ubuntu/model/model/SR_project/edsr_base_attention_v2_oh/edsr_base_attention_v2_oh-719656",
 										"ckpt_file":"/home/ubuntu/model/model/SR_project/EDSR_WGAN_att_l12000/EDSR_WGAN_att_l12000-141258",
 										"isGray": False,
@@ -1004,9 +1006,9 @@ class config:
 			
 			mconfig["edsr_attention_v3"] = {
 
-										"scale":[1],
-										"subimages":[96,96],
-										"padding":[0,0],
+										"scale":[2],
+										"subimages":(88,88, 3), #V1: [96,96]
+										"padding":4, #V1: [0,0]
 										#"ckpt_file":"/home/ubuntu/model/model/SR_project/edsr_base_attention_v2_oh/edsr_base_attention_v2_oh-719656",
 										"ckpt_file":"/home/ubuntu/model/model/SR_project/edsr_attention_v3_noatt/edsr_attention_v3_noatt-111496",
 										"isGray": False,
@@ -1022,7 +1024,7 @@ class config:
 		
 
 		eval_config = self.config["evaluation"]
-		eval_config["dataroot"] = '/home/ubuntu/dataset/SuperResolution/Set5/preprocessed_scale_1'
+		eval_config["dataroot"] = '/home/ubuntu/dataset/SuperResolution/Set5/preprocessed_scale_1_v2/test'
 		eval_config["test_set"] = ["Set5"]
 		eval_config["models"] = [edsr_attention_v3(self)]
 		eval_config["summary_file"] = "example_summary.txt"
