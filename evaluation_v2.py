@@ -113,7 +113,6 @@ class evaluation:
                 
                 grid_imgs[str(subimg_rloc[0]) + "_" + str(subimg_rloc[1]) + \
                             "_" +  str(subimg_cloc[0]) + "_" +  str(subimg_cloc[1])] = subimg
-
                 
         return grid_imgs
     
@@ -138,10 +137,13 @@ class evaluation:
             grid_c0 = int(key[2])
             grid_c1 = int(key[3])
 
+            
+
             mergeimg_loc_r = [grid_r0*self.scale, (grid_r1 - 2*self.padding_size)*self.scale]
             mergeimg_loc_c = [grid_c0*self.scale, (grid_c1 - 2*self.padding_size)*self.scale]
             gridimg_loc_r = [self.padding_size*self.scale , (grid_r1 - grid_r0 - self.padding_size)*self.scale]
             gridimg_loc_c = [self.padding_size*self.scale , (grid_c1 - grid_c0 - self.padding_size)*self.scale]
+
 
             merged_image[mergeimg_loc_r[0]:mergeimg_loc_r[1],
                          mergeimg_loc_c[0]:mergeimg_loc_c[1],
@@ -157,10 +159,19 @@ class evaluation:
     def load_model(self, config = {}, isNormallized=True):
 
         tf.reset_default_graph() 
-        self.inputs = tf.placeholder(tf.float32, [  None,
-                                                    None, 
-                                                    None,
-                                                    3])
+
+        if FULL_IMAGE:
+            self.inputs = tf.placeholder(tf.float32, [  None,
+                                                        None, 
+                                                        None,
+                                                        3])
+
+        else:
+            self.inputs = tf.placeholder(tf.float32, [ 1,
+                                                       int((self.subimg_size[0]+self.padding_size*2)), 
+                                                       int((self.subimg_size[1]+self.padding_size*2)),
+                                                       3])
+
         if isNormallized: inputs_n = self.inputs/255.
         else: inputs_n = self.inputs
 
@@ -182,7 +193,11 @@ class evaluation:
      
         #run model in model_ticket_list and return prediction       
         predicted = self.sess.run(self.predict_op, feed_dict = {self.inputs:[image]})
-        return predicted
+       
+        if type(predicted) is list:
+            return predicted[0]
+        else:
+            return predicted
     
     def run_evaluation(self):
 

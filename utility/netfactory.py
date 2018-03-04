@@ -11,6 +11,10 @@ import utility as ut
 def max_pool_layer(inputs, kernel_shape, stride, name=None, padding='VALID'):
           
     return tf.nn.max_pool(inputs, kernel_shape, stride, padding, name=name)
+
+def avg_pool_layer(inputs, kernel_shape, stride, name=None, padding='VALID'):
+          
+    return tf.nn.avg_pool(inputs, kernel_shape, stride, padding, name=name)
     
 def lrelu(x, name = "leaky", alpha = 0.2):
 

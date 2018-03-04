@@ -944,9 +944,8 @@ class MODEL(object):
 
         # Define dataset path
 
-    
-        test_dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/Set5/fake_preprocessed_scale_"+str(self.scale),type="test")
-        dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/DIV2K_fake/", lrtype='bicubic', type='train')
+        test_dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/Set5/validation_scale_2/",type="test")
+        dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/DIV2K/",lrtype="bicubic", type="train")
 
         log_dir = os.path.join(self.log_dir, self.ckpt_name, "log")
         if not os.path.exists(log_dir):
@@ -965,9 +964,17 @@ class MODEL(object):
         # Define iteration counter, timer and average loss
         itera_counter = 0
         learning_rate = 1e-4
-        #train_batch_num = len(train_data) // self.batch_size
 
-        epoch_pbar = tqdm(range(self.epoch))
+        train_data, train_label  = zip(*dataset)
+        itr_per_epoch = len(train_data)//self.batch_size 
+
+        if (self.curr_epoch*itr_per_epoch//200000) != 0:
+            learning_rate = self.learning_rate
+        else:
+            learning_rate = self.learning_rate
+       
+        epoch_pbar = tqdm(range(self.curr_epoch, self.epoch))
+       
         for ep in epoch_pbar:            
             # Run by batch images
             random.shuffle(dataset) 
@@ -978,9 +985,9 @@ class MODEL(object):
             epoch_pbar.refresh()
         
             batch_pbar = tqdm(range(0, len(train_data)//self.batch_size), desc="Batch: [0]")
-            
-           
-            if ep%4000 == 0 and ep != 0:learning_rate = learning_rate/2
+                  
+            if ep%(200000//itr_per_epoch) == 0 and ep != 0:
+                learning_rate = learning_rate/2
 
             for idx in batch_pbar:                
                         
@@ -1442,8 +1449,11 @@ class MODEL(object):
             lr_imgs = []
             images = os.listdir(dataset_path)
             #for i in range(len(images)//2):
-            lr_imgs.append([os.path.join(dataset_path, "img_"+str(i+1)+"_SRF_" + str(self.scale)+"_LR.png") for i in range(len(images)//2)])
-            hr_imgs = ([os.path.join(dataset_path, "img_"+str(i+1)+"_SRF_"+ str(self.scale)+"_HR.png")  for i in range(len(images)//2)])
+            #lr_imgs.append([os.path.join(dataset_path, "img_"+str(i+1)+"_SRF_" + str(self.scale)+"_LR.png") for i in range(len(images)//2)])
+            #hr_imgs = ([os.path.join(dataset_path, "img_"+str(i+1)+"_SRF_"+ str(self.scale)+"_HR.png")  for i in range(len(images)//2)])
+
+            lr_imgs.append([os.path.join(dataset_path, "img_"+str(i+1)+"_SRF_" + '2'+"_LR.png") for i in range(len(images)//2)])
+            hr_imgs = ([os.path.join(dataset_path, "img_"+str(i+1)+"_SRF_"+ '2'+"_HR.png")  for i in range(len(images)//2)])
         
            
         hr_list = []
@@ -1458,7 +1468,7 @@ class MODEL(object):
            lr_list.append(misc.imread(lr_imgs[0][i]))
            if lrtype == 'all':
             lr_list2.append(misc.imread(lr_imgs[1][i]))
-           if lrtype == 'bicubic' and i > 32: break
+           #if lrtype == 'bicubic' and i > 8: break
 
         print("[load_divk] type: [{}], lrtype: [{}]".format(type, lrtype))
         print("[load_divk] HR images number: [{}]".format(len(hr_list)))
@@ -1828,7 +1838,7 @@ class MODEL(object):
         Build SRCNN model
         """        
         # Define input and label images
-     
+
         self.input = tf.placeholder(tf.float32, [None, self.image_size, self.image_size, self.color_dim], name='images')
         self.image_target = tf.placeholder(tf.float32, [None, None, None, self.color_dim], name='labels')
         self.dropout = tf.placeholder(tf.float32, name='dropout')
@@ -1866,10 +1876,10 @@ class MODEL(object):
 
             return logits_loss
 
-        #self.l1_loss2 = tf.reduce_mean(tf.losses.absolute_difference(target,logits2))
-        #self.l1_loss4 = tf.reduce_mean(tf.losses.absolute_difference(target,logits4))
-        self.l1_loss2 = regional_l1loss(target,logits2)
-        self.l1_loss4 = regional_l1loss(target,logits4)
+        self.l1_loss2 = tf.reduce_mean(tf.losses.absolute_difference(target,logits2))
+        self.l1_loss4 = tf.reduce_mean(tf.losses.absolute_difference(target,logits4))
+        #self.l1_loss2 = regional_l1loss(target,logits2)
+        #self.l1_loss4 = regional_l1loss(target,logits4)
 
         self.train_op2 = tf.train.AdamOptimizer(self.lr).minimize(self.l1_loss2)
         self.train_op4 = tf.train.AdamOptimizer(self.lr).minimize(self.l1_loss4)
@@ -1937,15 +1947,21 @@ class MODEL(object):
             print(" [*] Load SUCCESS")
         else:
             print(" [!] Load failed...")
-
-        
-       
+      
         # Define iteration counter, timer and average loss
         itera_counter = 0
         learning_rate = 1e-4
-        #train_batch_num = len(train_data) // self.batch_size
 
-        epoch_pbar = tqdm(range(self.epoch))
+        train_data, train_label  = zip(*dataset)
+        itr_per_epoch = len(train_data)//self.batch_size 
+
+        if (self.curr_epoch*itr_per_epoch//200000) != 0:
+            learning_rate = self.learning_rate
+        else:
+            learning_rate = self.learning_rate
+       
+        epoch_pbar = tqdm(range(self.curr_epoch, self.epoch))
+
         for ep in epoch_pbar:            
             # Run by batch images
             random.shuffle(dataset) 
@@ -1956,9 +1972,10 @@ class MODEL(object):
             epoch_pbar.refresh()
         
             batch_pbar = tqdm(range(0, len(train_data)//self.batch_size), desc="Batch: [0]")
-            
-           
-            if ep%4000 == 0 and ep != 0:learning_rate = learning_rate/2
+                     
+            if ep%(200000//itr_per_epoch) == 0 and ep != 0:
+                learning_rate = learning_rate/2
+                
 
             for idx in batch_pbar:                
                         
@@ -4605,8 +4622,8 @@ class MODEL(object):
         
         ### Build model       
         gen_f = mz.build_model({"d_inputs":None, "d_target":self.target, "scale":self.scale, "feature_size" :64, "reuse":False, "is_training":True, "net":"Gen"})
-        dis_t = mz.build_model({"d_inputs":self.target, "d_target":self.target, "scale":self.scale, "feature_size" :64, "reuse":False, "is_training":True, "net":"Dis", "d_model":"PatchWGAN"})
-        dis_f = mz.build_model({"d_inputs":gen_f, "d_target":self.target, "scale":self.scale, "feature_size" :64, "reuse":True, "is_training":True, "net":"Dis", "d_model":"PatchWGAN"})
+        dis_t = mz.build_model({"d_inputs":self.target, "d_target":self.target, "scale":self.scale, "feature_size" :64, "reuse":False, "is_training":True, "net":"Dis", "d_model":"avgPatchWGAN"})
+        dis_f = mz.build_model({"d_inputs":gen_f, "d_target":self.target, "scale":self.scale, "feature_size" :64, "reuse":True, "is_training":True, "net":"Dis", "d_model":"avgPatchWGAN"})
 
         """        
         #### WGAN-GP ####
@@ -4639,7 +4656,7 @@ class MODEL(object):
 
 #        reconstucted_weight = 1.0  #StarGAN is 10 v3 
         #reconstucted_weight = 50  #StarGAN is 10
-        self.reconstucted_weight = reconstucted_weight = 2000
+        self.reconstucted_weight = reconstucted_weight = 50 #x4 135, 215, 255 failed,
         self.d_loss =   disc_fake_loss - disc_ture_loss
         self.g_l1loss = tf.reduce_mean(tf.losses.absolute_difference(target,gen_f))
         self.g_loss =  -1.0*disc_fake_loss + reconstucted_weight*self.g_l1loss
@@ -4732,7 +4749,7 @@ class MODEL(object):
             tf.summary.image("input_image",self.input , collections=['test'])
             tf.summary.image("target_image",target*255, collections=['test'])
             tf.summary.image("output_image",gen_f*255, collections=['test'])
-        
+            tf.summary.image("dis_diff",tf.abs(dis_f-dis_t)*100, collections=['test'])        
             self.merged_summary_test = tf.summary.merge_all('test')                    
         
         self.saver = tf.train.Saver()
@@ -4746,7 +4763,7 @@ class MODEL(object):
 
         # Define dataset path
         #96X96
-        test_dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/Set5/validation_EDSRbase96/Set5/X"+"2"+"/",type="test")
+        test_dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/Set5/validation_EDSRbase96/Set5/X"+"4"+"/",type="test")
         dataset = self.load_divk("/home/ubuntu/dataset/SuperResolution/DIV2K_pretrain/", lrtype='bicubic', type='train')
 
         log_dir = os.path.join(self.log_dir, self.ckpt_name, "log")
@@ -4784,7 +4801,8 @@ class MODEL(object):
             epoch_pbar.set_description("Epoch: [%2d], lr:%f" % ((ep+1), learning_rate))
             epoch_pbar.refresh()
         
-            batch_pbar = tqdm(range(0, len(train_data)//self.batch_size), desc="Batch: [0]")            
+            #batch_pbar = tqdm(range(0, len(train_data)//self.batch_size), desc="Batch: [0]")
+            batch_pbar = tqdm(range(0, 1), desc="Batch: [0]")            
 
             itr_per_epoch = len(train_data)//self.batch_size 
 #            if ep%(200000//itr_per_epoch) == 0 and ep != 0:

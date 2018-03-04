@@ -327,9 +327,9 @@ class model_zoo:
     def edsr_v2(self, kwargs):
 
         scale = kwargs["scale"]
-        feature_size = 64
-        scaling_factor = 1
-        num_resblock = 16
+        feature_size = 256 #128
+        scaling_factor = 0.1
+        num_resblock = 32
             
         model_params = {
 
@@ -533,7 +533,11 @@ class model_zoo:
                     att_net = tf.layers.dropout(att_net, rate=dropout, training=is_training, name='dropout1')
                     logits = nf.fc_layer(att_net, channels*(scale**2)*layers, name="logits", activat_fn=None)
                     
-                    bsize = tf.shape(logits)[0]
+                    bsize, a, b, c = att_net.get_shape().as_list()
+                    
+                    if bsize == None:
+                        bsize = -1
+                    
                     logits = tf.reshape(logits, (bsize,1,1,channels*(scale**2), layers))
                     weighting = tf.nn.softmax(logits)
                     
@@ -557,7 +561,7 @@ class model_zoo:
 
         scaling_factor = 1
         num_resblock = 16
-        att_layers = 15
+        att_layers = 30
             
         model_params = {
 
@@ -682,15 +686,16 @@ class model_zoo:
 
 
         scale = kwargs["scale"]
-        feature_size = 64
-        scaling_factor = 1
-        num_resblock = 16
-        att_layers = 30
+        feature_size = 256
+        scaling_factor = 0.1
+        num_resblock = 32
+        att_layers = 32 #30
 
         def local_attention(scope_name, inputs, scale, channels = 3,att_layers = att_layers):
             att_ksize = 8
-            num_resblock = 3       
-            bsize, a, b, c = inputs.get_shape().as_list()
+            num_resblock = 3 
+            scaling_factor = 1.0     
+            
             model_params = {
 
                         'conv1': [att_ksize,att_ksize,feature_size],
@@ -713,7 +718,10 @@ class model_zoo:
                     x += conv_1
 
                 att_net = nf.convolution_layer(x, model_params['att'], [1,1,1,1],name="att", activat_fn=None)
-                weighting = tf.reshape(att_net, (-1,a,b,channels*(scale**2), att_layers))
+                bsize, a, b, c = att_net.get_shape().as_list()
+                if bsize == None:
+                    bsize = -1
+                weighting = tf.reshape(att_net, (bsize,a,b,channels*(scale**2), att_layers))
                 weighting = tf.nn.softmax(weighting)
 
             return weighting
@@ -1736,7 +1744,10 @@ class model_zoo:
                     att_net = nf.convolution_layer(att_net, [3,3,512], [1,1,1,1],name="conv4-1")
                     #att_net = nf.convolution_layer(att_net, [3,3,512], [1,1,1,1],name="conv4-2")
                     att_net = tf.nn.max_pool(att_net, ksize=[1, 3, 3, 1],strides=[1, 2, 2, 1], padding='SAME')
-                    att_net = tf.reshape(att_net, [-1, int(np.prod(att_net.get_shape()[1:]))]) 
+                    bsize, a, b, c = att_net.get_shape().as_list()
+                    if bsize == None:
+                        bsize = -1
+                    att_net = tf.reshape(att_net, [bsize, int(np.prod(att_net.get_shape()[1:]))]) 
                     att_net = nf.fc_layer(att_net, 2048, name="fc1")
                     att_net = nf.fc_layer(att_net, 2048, name="fc2")
                     #att_net = tf.layers.dropout(att_net, rate=dropout, training=is_training, name='dropout1')
@@ -1779,6 +1790,7 @@ class model_zoo:
                         'conv2': [3,3,feature_size],
                         'conv3': [3,3,3],
                         'd_output': [3,3,3*feature_size],
+                        #'d_output': [3,3,3],
                         
                         'conv1_wgan-gp': [5,5,DEPTH],
                         'conv2_wgan-gp': [5,5,DEPTH*2],
@@ -1827,7 +1839,7 @@ class model_zoo:
 
                 with tf.name_scope("attention_x2"):
                     att_layers = feature_size
-                    arr = att_weight_x2 = attention_network(self.inputs, att_layers,3, is_training)
+                    arr = att_weight_x2 = attention_network(self.inputs, att_layers, 3, is_training)
                
                 x = nf.convolution_layer(g_input, model_params["conv1"], [1,1,1,1], name="conv1", activat_fn=None, initializer=init)
                 conv_1 = x
@@ -1910,13 +1922,6 @@ class model_zoo:
                     
                     x = nf.convolution_layer(pool3,           model_params["d_output_wgan"], [1,1,1,1], name="d_output_wgan",  activat_fn=nf.lrelu, initializer=init)
 
-                    ### v4
-#                    pool4 = nf.max_pool_layer(x, model_params["maxpool_wgan"], [1, 2, 2, 1], name="conv4_wgan_mp")
-#                    pool4_ = nf.max_pool_layer(-x, model_params["maxpool_wgan"], [1, 2, 2, 1], name="conv4_wgan_mp")
-#                    minus_mask = tf.cast(tf.greater(tf.abs(pool4_), pool4), tf.float32)
-#                    plus_mask = tf.cast(tf.greater(pool4, tf.abs(pool4_)), tf.float32)
-#                    x = plus_mask*pool4 + minus_mask*(-pool4_)
-
                     d_logits = x
 
                 elif d_model is "PatchWGAN_GP":    
@@ -1943,6 +1948,36 @@ class model_zoo:
                     d_patch = d_patch_weight*d_patch_stack
 
                     d_logits = d_patch
+
+                elif d_model is "nonPatchWGAN": 
+
+                    x = nf.convolution_layer(input_gan,   model_params["conv1_wgan"],    [1,1,1,1], name="conv1_wgan",     activat_fn=nf.lrelu, initializer=init)                    
+                    x = nf.convolution_layer(x,       model_params["conv2_wgan"],    [1,1,1,1], name="conv2_wgan",     activat_fn=nf.lrelu, initializer=init)
+                    x = nf.convolution_layer(x,           model_params["conv3_wgan"],    [1,1,1,1], name="conv3_wgan",     activat_fn=nf.lrelu, initializer=init)                
+                    x = nf.convolution_layer(x,           model_params["d_output_wgan"], [1,1,1,1], name="d_output_wgan",  activat_fn=nf.lrelu, initializer=init)
+
+                    d_logits = x
+
+                elif d_model is "avgPatchWGAN": 
+
+                    x = nf.convolution_layer(input_gan,   model_params["conv1_wgan"],    [1,1,1,1], name="conv1_wgan",     activat_fn=nf.lrelu, initializer=init)                    
+                    x = nf.convolution_layer(x,       model_params["conv2_wgan"],    [1,1,1,1], name="conv2_wgan",     activat_fn=nf.lrelu, initializer=init)
+                    x = nf.avg_pool_layer(x, [1, 5, 5, 1], [1, 2, 2, 1], name="conv2_wgan_avgp")
+                    x = nf.convolution_layer(x,           model_params["conv3_wgan"],    [1,1,1,1], name="conv3_wgan",     activat_fn=nf.lrelu, initializer=init)
+                    x = nf.convolution_layer(x,           model_params["conv3_wgan"],    [1,1,1,1], name="conv4_wgan",     activat_fn=nf.lrelu, initializer=init)                
+                    x = nf.avg_pool_layer(x, [1, 5, 5, 1], [1, 2, 2, 1], name="conv4_wgan_avgp")
+                    x = nf.convolution_layer(x,           model_params["d_output_wgan"], [1,1,1,1], name="d_output_wgan",  activat_fn=nf.lrelu, initializer=init)
+
+                    d_logits = x
+                
+                elif d_model is "nonPatchWGAN": 
+
+                    x = nf.convolution_layer(input_gan,   model_params["conv1_wgan"],    [1,1,1,1], name="conv1_wgan",     activat_fn=nf.lrelu, initializer=init)                    
+                    x = nf.convolution_layer(x,       model_params["conv2_wgan"],    [1,1,1,1], name="conv2_wgan",     activat_fn=nf.lrelu, initializer=init)
+                    x = nf.convolution_layer(x,           model_params["conv3_wgan"],    [1,1,1,1], name="conv3_wgan",     activat_fn=nf.lrelu, initializer=init)                
+                    x = nf.convolution_layer(x,           model_params["d_output_wgan"], [1,1,1,1], name="d_output_wgan",  activat_fn=nf.lrelu, initializer=init)
+
+                    d_logits = x 
                     
             return d_logits
 
