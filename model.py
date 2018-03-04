@@ -5193,6 +5193,7 @@ class MODEL(object):
         vgg_var_list = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='vgg_19')
         vgg_restore = tf.train.Saver(vgg_var_list)
         vgg_restore.restore(self.sess, vgg_ckpt)
+        print(" [*] Load VGG 19 SUCCESS")
         
         # Define iteration counter, learning rate...
         itera_counter = 0
