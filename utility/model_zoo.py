@@ -2084,6 +2084,36 @@ class model_zoo:
             arr = g_network
         return g_network, arr
 
+    def EDSR_WGAN_att_vgg_v1(self):
+
+        def VGG19_slim(input, type, reuse, scope):
+            # Define the feature to extract according to the type of perceptual
+            if type == 'VGG54':
+                target_layer = scope + 'vgg_19/conv5/conv5_4'
+            elif type == 'VGG22':
+                target_layer = scope + 'vgg_19/conv2/conv2_2'
+            else:
+                raise NotImplementedError('Unknown perceptual type')
+            _, output = nf.vgg_19(input, is_training=False, reuse=reuse)
+            output = output[target_layer]
+
+            return output
+
+        d_inputs = kwargs["d_inputs"]
+        
+        net_output = self.EDSR_WGAN_att(kwargs)
+        
+        if d_inputs != None:
+            loss_type = kwargs["loss_type"]
+            vgg_reuse = kwargs["vgg_reuse"]
+            scope = kwargs["scope"]
+            vgg_output =  VGG19_slim(d_inputs, loss_type, vgg_reuse, scope)
+        else:
+            vgg_output = None
+
+        return net_output, vgg_output 
+
+        
 
     def build_model(self, kwargs = {}):
 
@@ -2093,7 +2123,8 @@ class model_zoo:
                       "edsr_local_att_v2_upsample", "edsr_attention_v2", "edsr_v2_dual",
                       "edsr_lsgan", "edsr_lsgan_up", "edsr_lsgan_dis_large"
                       , "edsr_wgan_encode", "edsr_lsgan_recursive", "edsr_lsgan_lap",
-                      "edsr_lsgan_lap_v2", "edsr_lsgan_lap_att_v2", "EDSR_WGAN_att", "edsr_attention_v3"]
+                      "edsr_lsgan_lap_v2", "edsr_lsgan_lap_att_v2", "edsr_attention_v3",
+                      "EDSR_WGAN_att","EDSR_WGAN_att_vgg_v1"]
         
         if self.model_ticket not in model_list:
             print("sorry, wrong ticket!")
