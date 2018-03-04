@@ -1093,7 +1093,7 @@ class config:
 
 		train_config["mode"] = "small" # Operation mode: normal or freq [normal]
 		train_config["epoch"] = 100000  # Number of epoch [10]
-		train_config["batch_size"] = 16 # The size of batch images [128]
+		train_config["batch_size"] = 8 # The size of batch images [128]
 		train_config["image_size"] = 48 # The size of image to use [33]
 		train_config["label_size"] = 96 # The size of label to produce [21]
 		train_config["learning_rate"] = 1e-4 #The learning rate of gradient descent algorithm [1e-4]
@@ -1112,7 +1112,7 @@ class config:
 		train_config["ckpt_name"] = "EDSR_WGAN_att_vgg_v1_x2_b8" # Name of checkpoints
 		train_config["is_train"] = True # True for training, False for testing [True]
 		train_config["model_ticket"] = "EDSR_WGAN_att_vgg_v1" # Name of checkpoints
-		train_config["curr_epoch"] = 0 
+		train_config["curr_epoch"] = 356
 
 		def EDSR_WGAN_att_vgg_v1_x2(self):
 						

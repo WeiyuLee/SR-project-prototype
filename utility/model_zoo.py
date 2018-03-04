@@ -2084,7 +2084,7 @@ class model_zoo:
             arr = g_network
         return g_network, arr
 
-    def EDSR_WGAN_att_vgg_v1(self):
+    def EDSR_WGAN_att_vgg_v1(self, kwargs):
 
         def VGG19_slim(input, type, reuse, scope):
             # Define the feature to extract according to the type of perceptual
@@ -2095,19 +2095,22 @@ class model_zoo:
             else:
                 raise NotImplementedError('Unknown perceptual type')
             _, output = nf.vgg_19(input, is_training=False, reuse=reuse)
+            #print(output)
             output = output[target_layer]
 
             return output
 
         d_inputs = kwargs["d_inputs"]
-        
         net_output = self.EDSR_WGAN_att(kwargs)
         
         if d_inputs != None:
+
+            vgg_inputs = kwargs["vgg_input"]
             loss_type = kwargs["loss_type"]
             vgg_reuse = kwargs["vgg_reuse"]
             scope = kwargs["scope"]
-            vgg_output =  VGG19_slim(d_inputs, loss_type, vgg_reuse, scope)
+            with tf.name_scope(scope) as scope:
+                vgg_output =  VGG19_slim(vgg_inputs, loss_type, vgg_reuse, scope)
         else:
             vgg_output = None
 

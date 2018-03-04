@@ -1469,6 +1469,7 @@ class MODEL(object):
            lr_list.append(misc.imread(lr_imgs[0][i]))
            if lrtype == 'all':
             lr_list2.append(misc.imread(lr_imgs[1][i]))
+           
            #if lrtype == 'bicubic' and i > 8: break
 
         print("[load_divk] type: [{}], lrtype: [{}]".format(type, lrtype))
@@ -5024,7 +5025,7 @@ class MODEL(object):
                 summary_writer.add_summary(train_sum, ep)
                 summary_writer.add_summary(test_sum, ep) 
 
-     def build_EDSR_WGAN_att_vgg_v1(self):###
+    def build_EDSR_WGAN_att_vgg_v1(self):
         """
         Build SRCNN model
         """        
@@ -5045,10 +5046,10 @@ class MODEL(object):
         
         ### Build model       
         gen_f, _ = mz.build_model({"d_inputs":None, "d_target":self.target, "scale":self.scale, "feature_size" :64, "reuse":False, "is_training":True, "net":"Gen"})
-        dis_t, vgg_t = mz.build_model({"d_inputs":self.target, "d_target":self.target, "scale":self.scale, "feature_size" :64, "reuse":False, "is_training":True, "net":"Dis", "d_model":"avgPatchWGAN", \
-                                "loss_type":'VGG54',"vgg_reuse":False,"scope":'vgg19_1'})
-        dis_f, vgg_f = mz.build_model({"d_inputs":gen_f, "d_target":self.target, "scale":self.scale, "feature_size" :64, "reuse":True, "is_training":True, "net":"Dis", "d_model":"avgPatchWGAN", \
-                                "loss_type":'VGG54',"vgg_reuse":True,"scope":'vgg19_2'})
+        dis_t, vgg_t = mz.build_model({"d_inputs":self.target, "d_target":self.target, "scale":self.scale, "feature_size" :64, "reuse":False, "is_training":True, "net":"Dis", "d_model":"PatchWGAN", \
+                                'vgg_input':self.target, "loss_type":'VGG54',"vgg_reuse":False,"scope":'vgg19_1'})
+        dis_f, vgg_f = mz.build_model({"d_inputs":gen_f, "d_target":self.target, "scale":self.scale, "feature_size" :64, "reuse":True, "is_training":True, "net":"Dis", "d_model":"PatchWGAN", \
+                                'vgg_input':gen_f,"loss_type":'VGG54',"vgg_reuse":True,"scope":'vgg19_2'})
 
        
         ######## WGAN #######
@@ -5063,6 +5064,7 @@ class MODEL(object):
         self.g_vggloss = tf.reduce_mean(tf.losses.absolute_difference(vgg_t,vgg_f))
         self.g_loss =  -1.0*disc_fake_loss + reconstucted_weight*self.g_l1loss + reconstucted_weight* self.g_vggloss
         
+        print(vgg_t, vgg_f)
         
         train_variables = tf.trainable_variables()
         generator_variables = [v for v in train_variables if v.name.startswith("EDSR_gen")]
@@ -5103,16 +5105,18 @@ class MODEL(object):
             tf.summary.scalar("d_loss", self.d_loss, collections=['train'])
             tf.summary.scalar("d_true_loss", disc_ture_loss, collections=['train'])
             tf.summary.scalar("d_fake_loss", disc_fake_loss, collections=['train'])
-#            tf.summary.scalar("grad_loss", d_gp, collections=['train'])
+            tf.summary.scalar("g_vggloss", self.g_vggloss, collections=['train'])
             tf.summary.scalar("dis_f_mean", tf.reduce_mean(dis_f), collections=['train'])
             tf.summary.scalar("dis_t_mean", tf.reduce_mean(dis_t), collections=['train'])
+            tf.summary.scalar("vgg_t_mean", tf.reduce_mean(vgg_t), collections=['train'])
+            tf.summary.scalar("vgg_f_mean", tf.reduce_mean(vgg_f), collections=['train'])
             tf.summary.scalar("MSE", mse, collections=['train'])
             tf.summary.scalar("PSNR",PSNR, collections=['train'])
             tf.summary.image("input_image",self.input , collections=['train'])
             tf.summary.image("target_image",target*255, collections=['train'])
             tf.summary.image("output_image",gen_f*255, collections=['train'])
-#            tf.summary.image("enhence_img",(2.0*gen_f-target)*255, collections=['train'])
-#            tf.summary.image("dis_f_img",100*dis_f*255, collections=['train'])
+#            tf.summary.image("vgg_t",vgg_t*255, collections=['train'])
+#            tf.summary.image("vgg_f",vgg_f*255, collections=['train'])
 #            tf.summary.image("dis_t_img",100*dis_t*255, collections=['train'])
 #            tf.summary.image("dis_diff",tf.abs(dis_f-dis_t)*255, collections=['train'])
             tf.summary.histogram("d_false", dis_f, collections=['train'])
@@ -5189,11 +5193,12 @@ class MODEL(object):
             print(" [!] Load failed...")       
 
         # Restore VGG network
-        vgg_ckpt = 'vgg_path'
+        vgg_ckpt = '/home/ubuntu/model/model/vgg19/vgg_19.ckpt'    
         vgg_var_list = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='vgg_19')
         vgg_restore = tf.train.Saver(vgg_var_list)
         vgg_restore.restore(self.sess, vgg_ckpt)
         print(" [*] Load VGG 19 SUCCESS")
+       
         
         # Define iteration counter, learning rate...
         itera_counter = 0
