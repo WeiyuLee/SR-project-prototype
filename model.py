@@ -4624,15 +4624,15 @@ class MODEL(object):
         
         ### Build model       
         gen_f = mz.build_model({"d_inputs":None, "d_target":self.target, "scale":self.scale, "feature_size" :64, "reuse":False, "is_training":True, "net":"Gen"})
-        dis_t = mz.build_model({"d_inputs":self.target, "d_target":self.target, "scale":self.scale, "feature_size" :64, "reuse":False, "is_training":True, "net":"Dis", "d_model":"avgPatchWGAN"})
-        dis_f = mz.build_model({"d_inputs":gen_f, "d_target":self.target, "scale":self.scale, "feature_size" :64, "reuse":True, "is_training":True, "net":"Dis", "d_model":"avgPatchWGAN"})
+        dis_t = mz.build_model({"d_inputs":self.target, "d_target":self.target, "scale":self.scale, "feature_size" :64, "reuse":False, "is_training":True, "net":"Dis", "d_model":"nonPatchWGAN_star"})
+        dis_f = mz.build_model({"d_inputs":gen_f, "d_target":self.target, "scale":self.scale, "feature_size" :64, "reuse":True, "is_training":True, "net":"Dis", "d_model":"nonPatchWGAN_star"})
 
-        """        
+               
         #### WGAN-GP ####
         # Calculate gradient penalty
         self.epsilon = epsilon = tf.random_uniform([self.curr_batch_size, 1, 1, 1], 0.0, 1.0)
         x_hat = epsilon * self.target + (1. - epsilon) * (gen_f)
-        d_hat = mz.build_model({"d_inputs":x_hat,"d_target":self.target,"scale":self.scale,"feature_size" :64, "reuse":True, "is_training":True, "net":"Dis", "d_model":"PatchWGAN_GP"})
+        d_hat = mz.build_model({"d_inputs":x_hat,"d_target":self.target,"scale":self.scale,"feature_size" :64, "reuse":True, "is_training":True, "net":"Dis", "d_model":"nonPatchWGAN_star"})
         d_gp = tf.gradients(d_hat, [x_hat])[0]
         d_gp = tf.sqrt(tf.reduce_sum(tf.square(d_gp), axis=[1,2,3]))
         d_gp = tf.reduce_mean((d_gp - 1.0)**2) * 10
@@ -4643,7 +4643,7 @@ class MODEL(object):
         self.d_loss =   disc_fake_loss - disc_ture_loss + d_gp
         
         # Generator loss
-        reconstucted_weight = 1.0
+        reconstucted_weight = self.reconstucted_weight = 1.0
         self.g_l1loss = tf.reduce_mean(tf.losses.absolute_difference(target, gen_f))
         self.g_loss = -1.0*disc_fake_loss + reconstucted_weight*self.g_l1loss
         train_variables = tf.trainable_variables()
@@ -4687,7 +4687,7 @@ class MODEL(object):
         self.train_d = optimizer.apply_gradients(wgvs_d)
         self.train_g = optimizer.apply_gradients(wgvs_g)
 
-
+"""
         self.g_output = gen_f
         
         mse = tf.reduce_mean(tf.squared_difference(target*255.,gen_f*255.))    
@@ -4717,8 +4717,9 @@ class MODEL(object):
 #            tf.summary.image("dis_diff",tf.abs(dis_f-dis_t)*255, collections=['train'])
             tf.summary.histogram("d_false", dis_f, collections=['train'])
             tf.summary.histogram("d_true", dis_t, collections=['train'])
+            self.merged_summary_train = tf.summary.merge_all('train')  
 
-
+            """
             idx = 0
             for grad, var in gvs_g_l1:
    
@@ -4736,10 +4737,8 @@ class MODEL(object):
                     idx+=1
                 else:
                     break
-
+            """
             
-            self.merged_summary_train = tf.summary.merge_all('train')          
-
         with tf.name_scope('test_summary'):
 
             tf.summary.scalar("loss", self.g_l1loss, collections=['test'])
@@ -4837,7 +4836,7 @@ class MODEL(object):
                                                                                          self.dropout: 1.,
                                                                                          self.lr:learning_rate
                                                                                        })
-                    self.sess.run(self.clip_discriminator_var_op)
+                    #self.sess.run(self.clip_discriminator_var_op)
                    
             if ep % 5 == 0 and ep != 0:
                 self.save_ckpt(self.checkpoint_dir, self.ckpt_name, itera_counter)

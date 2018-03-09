@@ -692,8 +692,10 @@ class model_zoo:
         att_layers = 32 #30
 
         def local_attention(scope_name, inputs, scale, channels = 3,att_layers = att_layers):
-            att_ksize = 8
-            num_resblock = 3 
+            
+            att_ksize = 5
+            feature_size = 64
+            num_resblock = 6
             scaling_factor = 1.0     
             
             model_params = {
@@ -725,6 +727,7 @@ class model_zoo:
                 weighting = tf.nn.softmax(weighting)
 
             return weighting
+
             
         model_params = {
 
@@ -1831,7 +1834,7 @@ class model_zoo:
         if net is "Gen":
         
             ### Generator
-            num_resblock = 16
+            num_resblock = 4
                        
             g_input = self.inputs
             
@@ -1887,7 +1890,7 @@ class model_zoo:
                     d_logits = nf.convolution_layer(x, model_params["d_output"], [1,1,1,1], name="conv4", activat_fn=nf.lrelu, flatten=False, initializer=init)
                     
                 elif d_model is "WGAN-GP":
-                    
+                    print("GP")
                     x = nf.convolution_layer(input_gan, model_params["conv1_wgan-gp"],    [1,1,1,1], name="conv1_wgan-gp",     activat_fn=nf.lrelu, initializer=init)
                     x = nf.convolution_layer(x,         model_params["conv2_wgan-gp"],    [1,1,1,1], name="conv2_wgan-gp",     activat_fn=nf.lrelu, initializer=init)
                     x = nf.convolution_layer(x,         model_params["conv3_wgan-gp"],    [1,1,1,1], name="conv3_wgan-gp",     activat_fn=nf.lrelu, initializer=init)
@@ -1970,12 +1973,15 @@ class model_zoo:
 
                     d_logits = x
                 
-                elif d_model is "nonPatchWGAN": 
+                elif d_model is "nonPatchWGAN_star": 
 
-                    x = nf.convolution_layer(input_gan,   model_params["conv1_wgan"],    [1,1,1,1], name="conv1_wgan",     activat_fn=nf.lrelu, initializer=init)                    
-                    x = nf.convolution_layer(x,       model_params["conv2_wgan"],    [1,1,1,1], name="conv2_wgan",     activat_fn=nf.lrelu, initializer=init)
-                    x = nf.convolution_layer(x,           model_params["conv3_wgan"],    [1,1,1,1], name="conv3_wgan",     activat_fn=nf.lrelu, initializer=init)                
-                    x = nf.convolution_layer(x,           model_params["d_output_wgan"], [1,1,1,1], name="d_output_wgan",  activat_fn=nf.lrelu, initializer=init)
+                    x = nf.convolution_layer(input_gan,   [4,4,64],    [1,1,1,1], name="conv1_wgan",     activat_fn=nf.lrelu, initializer=init)                    
+                    x = nf.convolution_layer(x,       [4,4,64],    [1,2,2,1], name="conv2_wgan",     activat_fn=nf.lrelu, initializer=init)
+                    x = nf.convolution_layer(x,       [4,4,256],    [1,1,1,1], name="conv3_wgan",     activat_fn=nf.lrelu, initializer=init)                
+                    x = nf.convolution_layer(x,       [4,4,512], [1,1,1,1], name="conv4_wgan",  activat_fn=nf.lrelu, initializer=init)
+                    x = nf.convolution_layer(x,       [4,4,1024], [1,2,2,1], name="conv5_wgan",  activat_fn=nf.lrelu, initializer=init)
+                    x = nf.convolution_layer(x,       [4,4,2048], [1,1,1,1], name="conv6_wgan",  activat_fn=nf.lrelu, initializer=init)
+                    x = nf.convolution_layer(x,       [3,3,1], [1,1,1,1], name="d_output_wgan",  activat_fn=nf.lrelu, initializer=init)
 
                     d_logits = x 
                     

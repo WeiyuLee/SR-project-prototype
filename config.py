@@ -421,7 +421,7 @@ class config:
 		train_config = self.config["train"]
 
 		train_config["mode"] = "small" # Operation mode: normal or freq [normal]
-		train_config["epoch"] = 300000  # Number of epoch [10]
+		train_config["epoch"] = 20000  # Number of epoch [10]
 		train_config["batch_size"] = 16 # The size of batch images [128]
 		train_config["image_size"] = 48 # The size of image to use [33]
 		train_config["label_size"] = 96 # The size of label to produce [21]
@@ -438,10 +438,10 @@ class config:
 		train_config["h5_dir"] = "/home/ubuntu/dataset/SuperResolution/train" # Name of train dataset .h5 file
 		train_config["train_h5_name"] = "train" # Name of train dataset .h5 file
 		train_config["test_h5_name"] = "test" # Name of test dataset .h5 file
-		train_config["ckpt_name"] = "edsr_attention_v2_32x2_fullest" # Name of checkpoints
+		train_config["ckpt_name"] = "edsr_attention_v2_32x2_fullest_scale01_a64k5" # Name of checkpoints
 		train_config["is_train"] = True # True for training, False for testing [True]
 		train_config["model_ticket"] = "edsr_attention_v2" # Name of checkpoints
-		train_config["curr_epoch"] = 0
+		train_config["curr_epoch"] = 6175
 
 		def edsr_attention_v2(self):
 						
@@ -923,12 +923,12 @@ class config:
 
 		train_config["mode"] = "small" # Operation mode: normal or freq [normal]
 		train_config["epoch"] = 100000  # Number of epoch [10]
-		train_config["batch_size"] = 16 # The size of batch images [128]
+		train_config["batch_size"] = 8 # The size of batch images [128]
 		train_config["image_size"] = 48 # The size of image to use [33]
 		train_config["label_size"] = 96 # The size of label to produce [21]
 		train_config["learning_rate"] = 1e-4 #The learning rate of gradient descent algorithm [1e-4]
 		train_config["color_dim"] = 3 # Dimension of image color. [1]
-		train_config["scale"] = 2 # The size of scale factor for preprocessing input image [3]
+		train_config["scale"] = 4 # The size of scale factor for preprocessing input image [3]
 		train_config["train_extract_stride"] = 14 #The size of stride to apply input image [14]
 		train_config["test_extract_stride"] = train_config["label_size"] #The size of stride to apply input image [14]
 		train_config["checkpoint_dir"] = "/home/ubuntu/model/model/SR_project/" #Name of checkpoint directory [checkpoint]
@@ -939,10 +939,10 @@ class config:
 		train_config["h5_dir"] = "/home/ubuntu/dataset/SuperResolution/train" # Name of train dataset .h5 file
 		train_config["train_h5_name"] = "train" # Name of train dataset .h5 file
 		train_config["test_h5_name"] = "test" # Name of test dataset .h5 file
-		train_config["ckpt_name"] = "EDSR_WGAN_att_l12000" # Name of checkpoints
+		train_config["ckpt_name"] = "EDSR_WGAN_att_GPStar_X4" # Name of checkpoints
 		train_config["is_train"] = True # True for training, False for testing [True]
 		train_config["model_ticket"] = "EDSR_WGAN_att" # Name of checkpoints
-		train_config["curr_epoch"] = 29367 
+		train_config["curr_epoch"] = 0 
 
 		def EDSR_WGAN_att_v1(self):
 						
